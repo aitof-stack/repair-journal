@@ -22,16 +22,6 @@ let selectedUser = null;
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
-    // Проверяем, не авторизован ли пользователь
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-    
-    if (isAuthenticated && currentUser) {
-        // Если уже авторизован, перенаправляем на главную
-        window.location.href = 'index.html';
-        return;
-    }
-    
     // Загружаем список пользователей для ремонтной службы по умолчанию
     populateUserList('repair');
     
@@ -148,8 +138,8 @@ function login() {
         permissions: getPermissions(selectedUserType)
     };
     
-    localStorage.setItem('currentUser', JSON.stringify(userData));
-    localStorage.setItem('isAuthenticated', 'true');
+    localStorage.setItem('repair_journal_currentUser', JSON.stringify(userData));
+    localStorage.setItem('repair_journal_isAuthenticated', 'true');
     
     // Перенаправляем на главную страницу
     window.location.href = 'index.html';
@@ -182,12 +172,19 @@ function getPermissions(userType) {
 
 // Функция проверки аутентификации
 function checkAuthentication() {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
+    const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
     
     if (!isAuthenticated || !currentUser) {
         return null;
     }
     
     return currentUser;
+}
+
+// Функция выхода
+function logout() {
+    localStorage.removeItem('repair_journal_currentUser');
+    localStorage.removeItem('repair_journal_isAuthenticated');
+    window.location.href = 'login.html';
 }
