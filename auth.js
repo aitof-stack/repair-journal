@@ -22,6 +22,16 @@ let selectedUser = null;
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
+    // Проверяем, не авторизован ли уже пользователь
+    const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
+    const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
+    
+    if (isAuthenticated && currentUser) {
+        // Если уже авторизован, перенаправляем на главную
+        window.location.href = 'index.html';
+        return;
+    }
+    
     // Загружаем список пользователей для ремонтной службы по умолчанию
     populateUserList('repair');
     
