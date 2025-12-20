@@ -577,9 +577,20 @@ async function loadEquipmentDatabase(forceUpdate = false) {
                 throw new Error('CSV файл пуст');
             }
             
+            // Логируем первые несколько строк для отладки
+            const lines = csvContent.split('\n');
+            console.log('Первые 3 строки CSV:');
+            for (let i = 0; i < Math.min(3, lines.length); i++) {
+                console.log(`Строка ${i + 1}: ${lines[i].substring(0, 100)}...`);
+            }
+            
             equipmentDatabase = parseCSV(csvContent);
             
             if (equipmentDatabase.length === 0) {
+                console.log('Содержимое первых 5 строк для отладки:');
+                for (let i = 0; i < Math.min(5, lines.length); i++) {
+                    console.log(`Строка ${i + 1}: "${lines[i]}"`);
+                }
                 throw new Error('Не удалось загрузить данные оборудования');
             }
             
@@ -649,59 +660,82 @@ function loadRepairRequests() {
     updateSummary();
 }
 
-// Парсинг CSV с GitHub - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// Парсинг CSV с GitHub - УЛУЧШЕННАЯ ВЕРСИЯ
 function parseCSV(csvContent) {
     const equipment = [];
     const lines = csvContent.split('\n');
     
-    console.log('CSV строк:', lines.length);
+    console.log('Общее количество строк CSV:', lines.length);
     
-    for (let i = 0; i < lines.length; i++) {
+    // Определяем разделитель
+    const firstLine = lines[0] || '';
+    let delimiter = ';';
+    
+    if (firstLine.includes(';')) {
+        delimiter = ';';
+        console.log('Используется разделитель: точка с запятой');
+    } else if (firstLine.includes(',')) {
+        delimiter = ',';
+        console.log('Используется разделитель: запятая');
+    } else if (firstLine.includes('\t')) {
+        delimiter = '\t';
+        console.log('Используется разделитель: табуляция');
+    }
+    
+    // Пропускаем заголовок если он есть
+    let startIndex = 0;
+    if (lines[0] && (
+        lines[0].toLowerCase().includes('участок') ||
+        lines[0].toLowerCase().includes('инв') ||
+        lines[0].toLowerCase().includes('наименование')
+    )) {
+        startIndex = 1;
+        console.log('Пропускаем заголовок');
+    }
+    
+    for (let i = startIndex; i < lines.length; i++) {
         const line = lines[i].trim();
         
-        // Пропускаем пустые строки и строки без точки с запятой
-        if (!line || !line.includes(';')) continue;
+        if (!line) continue;
         
         try {
-            // Простой парсинг CSV - разделяем по точке с запятой
-            const parts = line.split(';');
+            // Простой парсинг с учетом кавычек
+            const parts = parseCSVLine(line, delimiter);
             
-            // Проверяем количество частей и наличие данных
             if (parts.length >= 5) {
                 const item = {
-                    location: (parts[0] || '').replace(/"/g, '').trim(),
-                    invNumber: (parts[1] || '').replace(/"/g, '').trim(),
-                    name: (parts[2] || '').replace(/"/g, '').trim(),
-                    model: (parts[3] || '').replace(/"/g, '').trim() || '-',
-                    machineNumber: (parts[4] || '').replace(/"/g, '').trim() || '-'
+                    location: cleanValue(parts[0]),
+                    invNumber: cleanValue(parts[1]),
+                    name: cleanValue(parts[2]),
+                    model: cleanValue(parts[3]) || '-',
+                    machineNumber: cleanValue(parts[4]) || '-'
                 };
                 
-                // Проверяем, что это валидная запись (есть инвентарный номер)
-                if (item.invNumber && item.name) {
-                    // Если название слишком короткое, может быть это заголовок
-                    if (item.name.length > 2 && !item.name.toLowerCase().includes('наименование')) {
+                // Проверяем, что это валидная запись
+                if (item.invNumber && item.name && item.name.length > 2) {
+                    // Проверяем, что это не заголовок
+                    if (!item.name.toLowerCase().includes('наименование') &&
+                        !item.name.toLowerCase().includes('оборудование') &&
+                        !isNaN(parseInt(item.invNumber.replace(/\D/g, '')))) {
                         equipment.push(item);
                     }
                 }
-            } else if (parts.length === 1 && parts[0].includes(',')) {
-                // Альтернативный формат CSV с запятыми
-                const altParts = line.split(',');
-                if (altParts.length >= 5) {
-                    const item = {
-                        location: (altParts[0] || '').replace(/"/g, '').trim(),
-                        invNumber: (altParts[1] || '').replace(/"/g, '').trim(),
-                        name: (altParts[2] || '').replace(/"/g, '').trim(),
-                        model: (altParts[3] || '').replace(/"/g, '').trim() || '-',
-                        machineNumber: (altParts[4] || '').replace(/"/g, '').trim() || '-'
-                    };
-                    
-                    if (item.invNumber && item.name && item.name.length > 2) {
-                        equipment.push(item);
-                    }
+            } else if (parts.length >= 3) {
+                // Попробуем с меньшим количеством полей
+                const item = {
+                    location: parts.length > 0 ? cleanValue(parts[0]) : '',
+                    invNumber: parts.length > 1 ? cleanValue(parts[1]) : '',
+                    name: parts.length > 2 ? cleanValue(parts[2]) : '',
+                    model: parts.length > 3 ? cleanValue(parts[3]) : '-',
+                    machineNumber: parts.length > 4 ? cleanValue(parts[4]) : '-'
+                };
+                
+                if (item.invNumber && item.name && item.name.length > 2) {
+                    equipment.push(item);
                 }
             }
         } catch (error) {
-            console.warn('Ошибка парсинга строки CSV:', line.substring(0, 50) + '...', error);
+            console.warn(`Ошибка парсинга строки ${i + 1}:`, line.substring(0, 50) + '...', error);
             continue;
         }
     }
@@ -709,7 +743,7 @@ function parseCSV(csvContent) {
     console.log('Успешно распарсено записей:', equipment.length);
     
     // Если не удалось распарсить, пробуем альтернативный подход
-    if (equipment.length === 0) {
+    if (equipment.length === 0 && lines.length > 1) {
         console.log('Пробуем альтернативный метод парсинга...');
         return parseCSVAlternative(csvContent);
     }
@@ -717,46 +751,86 @@ function parseCSV(csvContent) {
     return equipment;
 }
 
+// Парсинг одной строки CSV с учетом кавычек
+function parseCSVLine(line, delimiter) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+        
+        if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+                // Двойная кавычка внутри кавычек
+                current += '"';
+                i++; // Пропускаем следующую кавычку
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === delimiter && !inQuotes) {
+            result.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    
+    result.push(current);
+    return result;
+}
+
+// Очистка значения
+function cleanValue(value) {
+    if (!value) return '';
+    // Удаляем кавычки и лишние пробелы
+    let cleaned = value.toString().replace(/^["']|["']$/g, '').trim();
+    // Удаляем лишние пробелы
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    return cleaned;
+}
+
 // Альтернативный метод парсинга CSV
 function parseCSVAlternative(csvContent) {
     const equipment = [];
     const lines = csvContent.split('\n');
     
+    console.log('Альтернативный парсинг, строк:', lines.length);
+    
+    // Пробуем разные форматы
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         
         if (!line) continue;
         
         // Пробуем разные разделители
-        let parts = [];
+        let parts = null;
         
-        // Сначала пробуем точку с запятой
+        // Формат 1: Участок;Инв. номер;Наименование оборудования;Модель;Номер станка
         if (line.includes(';')) {
-            parts = line.split(';');
+            parts = line.split(';').map(p => p.trim().replace(/^["']|["']$/g, ''));
         }
-        // Потом пробуем запятую
+        // Формат 2: с запятыми
         else if (line.includes(',')) {
-            parts = line.split(',');
-        }
-        // Потом пробуем табуляцию
-        else if (line.includes('\t')) {
-            parts = line.split('\t');
+            parts = line.split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
         }
         
-        if (parts.length >= 5) {
+        if (parts && parts.length >= 3) {
             const item = {
-                location: cleanCSVValue(parts[0]),
-                invNumber: cleanCSVValue(parts[1]),
-                name: cleanCSVValue(parts[2]),
-                model: cleanCSVValue(parts[3]) || '-',
-                machineNumber: cleanCSVValue(parts[4]) || '-'
+                location: parts[0] || '',
+                invNumber: parts[1] || '',
+                name: parts[2] || '',
+                model: parts[3] || '-',
+                machineNumber: parts[4] || '-'
             };
             
-            // Проверяем, что это не заголовок
+            // Проверяем, что это данные, а не заголовок
             if (item.invNumber && 
                 item.name && 
-                item.name.length > 2 && 
-                !isNaN(parseInt(item.invNumber))) {
+                item.name.length > 2 &&
+                !item.name.toLowerCase().includes('наименование') &&
+                !isNaN(parseInt(item.invNumber.replace(/\D/g, '')))) {
                 equipment.push(item);
             }
         }
@@ -764,13 +838,6 @@ function parseCSVAlternative(csvContent) {
     
     console.log('Альтернативным методом распарсено:', equipment.length, 'записей');
     return equipment;
-}
-
-// Очистка значения CSV
-function cleanCSVValue(value) {
-    if (!value) return '';
-    // Удаляем кавычки и лишние пробелы
-    return value.toString().replace(/^["']|["']$/g, '').trim();
 }
 
 // Тестовые данные оборудования (используются если GitHub недоступен)
