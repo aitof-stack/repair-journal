@@ -23,6 +23,23 @@
         margin: 2px 0;
         padding: 8px;
     }
+    
+    .search-filter {
+        flex-direction: column;
+    }
+    
+    .search-filter input,
+    .search-filter select {
+        width: 100%;
+    }
+    
+    .button-group {
+        flex-direction: column;
+    }
+    
+    .button-group .btn {
+        width: 100%;
+    }
 }
 
 /* Портретная ориентация */
@@ -34,12 +51,19 @@
     table {
         min-width: 1000px;
     }
+    
+    .user-info {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
 }
 
 /* Альбомная ориентация */
 @media (max-width: 1024px) and (orientation: landscape) {
     .container {
         max-width: 100%;
+        padding: 10px;
     }
     
     table {
@@ -66,6 +90,20 @@
     z-index: 1000;
     display: none;
     transition: opacity 0.3s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    max-width: 400px;
+}
+
+.notification.success {
+    background-color: #4CAF50;
+}
+
+.notification.error {
+    background-color: #f44336;
+}
+
+.notification.warning {
+    background-color: #ff9800;
 }
 
 /* Статус соединения */
@@ -79,6 +117,11 @@
     border-radius: 4px;
     font-size: 12px;
     z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.connection-status.offline {
+    background-color: #f44336;
 }
 
 /* Дашборд */
@@ -95,6 +138,12 @@
     border-radius: 8px;
     border-left: 4px solid #2196F3;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
 .stat-card h3 {
@@ -115,6 +164,10 @@
     font-size: 12px;
     color: #4CAF50;
 }
+
+.stat-card:nth-child(2) { border-left-color: #4CAF50; }
+.stat-card:nth-child(3) { border-left-color: #9C27B0; }
+.stat-card:nth-child(4) { border-left-color: #FF9800; }
 
 /* Статусы заявок */
 .status-pending {
@@ -142,8 +195,82 @@
     border-radius: 4px;
     cursor: pointer;
     font-size: 13px;
+    transition: background-color 0.3s;
 }
 
 .btn-delete:hover {
     background-color: #d32f2f;
+}
+
+/* Оптимизация для печати */
+@media print {
+    .search-filter,
+    .button-group,
+    .user-info,
+    .connection-status,
+    .notification {
+        display: none !important;
+    }
+    
+    .table-container {
+        overflow: visible;
+    }
+    
+    table {
+        min-width: auto;
+        width: 100%;
+    }
+}
+
+/* Анимации */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* Улучшение фокуса для доступности */
+:focus {
+    outline: 2px solid #4CAF50;
+    outline-offset: 2px;
+}
+
+/* Плавная прокрутка */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Оптимизация шрифтов */
+body {
+    font-display: swap;
+}
+
+/* Улучшенные тени для глубины */
+.form-section,
+.table-container,
+.modal-content {
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+/* Градиенты для кнопок */
+.btn {
+    background-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.1));
+}
+
+.btn:hover {
+    background-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.2));
+}
+
+/* Плавные переходы */
+* {
+    transition: background-color 0.3s, border-color 0.3s, transform 0.3s;
 }
