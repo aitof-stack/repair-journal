@@ -3,7 +3,7 @@
 // Константы
 const APP_VERSION = '2.0.1'; // Обновленная версия
 const APP_NAME = 'Ремонтный журнал';
-const EQUIPMENT_DB_URL = 'https://aitof-stack.github.io/repair-journal/data/equipment_database.csv';
+const EQUIPMENT_DB_URL = 'data/equipment_database.csv';
 
 // Переменные приложения
 let equipmentDatabase = [];
