@@ -1,7 +1,7 @@
 // ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ
 
 // Константы
-const APP_VERSION = '2.0.3'; // Исправленная версия
+const APP_VERSION = '2.0.4'; // Исправленная версия
 const APP_NAME = 'Ремонтный журнал';
 const EQUIPMENT_DB_URL = 'https://aitof-stack.github.io/repair-journal/data/equipment_database.csv';
 
@@ -17,6 +17,224 @@ let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
 let machineNumberInput, authorInput, clearBtn, repairTableBody, searchInput;
 let statusFilter, locationFilter, monthFilter, totalRequestsElement;
 let pendingRequestsElement, completedRequestsElement, totalDowntimeElement;
+
+// ============ ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ ОБРАБОТКИ СОБЫТИЙ ============
+
+// Функции которые должны быть доступны глобально
+window.logout = function() {
+    if (confirm('Вы уверены, что хотите выйти?')) {
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('isAuthenticated');
+        localStorage.removeItem('equipmentDatabase');
+        localStorage.removeItem('repairRequests');
+        window.location.href = 'login.html';
+    }
+};
+
+window.importEquipmentDB = function() {
+    if (!currentUser) {
+        showAccessError();
+        return;
+    }
+    
+    if (currentUser.type !== 'admin' && currentUser.type !== 'author') {
+        showNotification('У вас нет прав для импорта данных', 'error');
+        return;
+    }
+    
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,.txt,.json';
+    
+    input.onchange = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            try {
+                const content = e.target.result;
+                
+                if (file.name.endsWith('.csv')) {
+                    equipmentDatabase = parseCSV(content);
+                    showNotification(`Загружено ${equipmentDatabase.length} записей из CSV`, 'success');
+                } else if (file.name.endsWith('.json')) {
+                    const data = JSON.parse(content);
+                    if (Array.isArray(data)) {
+                        equipmentDatabase = data;
+                        showNotification(`Загружено ${equipmentDatabase.length} записей из JSON`, 'success');
+                    } else {
+                        throw new Error('Неверный формат JSON');
+                    }
+                } else {
+                    throw new Error('Неподдерживаемый формат файла');
+                }
+                
+                localStorage.setItem('equipmentDatabase', JSON.stringify(equipmentDatabase));
+                populateInvNumberSelect();
+                populateLocationFilter();
+                
+            } catch (error) {
+                console.error('Ошибка обработки файла:', error);
+                showNotification('Ошибка обработки файла: ' + error.message, 'error');
+            }
+        };
+        
+        reader.readAsText(file);
+    };
+    
+    input.click();
+};
+
+window.exportRepairData = function() {
+    if (!currentUser) {
+        showAccessError();
+        return;
+    }
+    
+    if (currentUser.type !== 'admin') {
+        showNotification('Только администраторы могут экспортировать данные', 'error');
+        return;
+    }
+    
+    if (repairRequests.length === 0) {
+        showNotification('Нет данных для экспорта', 'warning');
+        return;
+    }
+    
+    let csvContent = "Дата;Время;Автор;Участок;Инв.номер;Оборудование;Модель;Номер станка;Неисправность;Дата окончания;Время окончания;Статус;Кол-во простоев;Время простоя;Номенклатура\n";
+    
+    repairRequests.forEach(request => {
+        csvContent += `"${request.date || ''}";"${request.time || ''}";"${request.author || ''}";"${request.location || ''}";"${request.invNumber || ''}";"${request.equipmentName || ''}";"${request.model || ''}";"${request.machineNumber || ''}";"${request.faultDescription || ''}";"${request.repairEndDate || ''}";"${request.repairEndTime || ''}";"${request.status || ''}";"${request.downtimeCount || 0}";"${request.downtimeHours || 0}";"${request.productionItem || ''}"\n`;
+    });
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", `заявки_на_ремонт_${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+    
+    showNotification(`Экспортировано ${repairRequests.length} заявок`, 'success');
+};
+
+window.showDashboard = function() {
+    if (!currentUser) {
+        showAccessError();
+        return;
+    }
+    
+    const modal = document.getElementById('dashboardModal');
+    const dashboardContent = document.getElementById('dashboardContent');
+    
+    if (!modal || !dashboardContent) {
+        showNotification('Ошибка открытия дашборда', 'error');
+        return;
+    }
+    
+    dashboardContent.innerHTML = generateDashboardHTML();
+    modal.style.display = 'block';
+};
+
+window.closeDashboard = function() {
+    const modal = document.getElementById('dashboardModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+};
+
+window.deleteRequest = function(id) {
+    if (!currentUser) {
+        showAccessError();
+        return;
+    }
+    
+    if (currentUser.type !== 'admin') {
+        showNotification('Только администраторы могут удалять заявки', 'error');
+        return;
+    }
+    
+    if (!confirm('Вы уверены, что хотите удалить эту заявку?')) {
+        return;
+    }
+    
+    try {
+        repairRequests = repairRequests.filter(request => request.id !== id);
+        localStorage.setItem('repairRequests', JSON.stringify(repairRequests));
+        
+        renderRepairTable();
+        updateSummary();
+        
+        showNotification('Заявка успешно удалена', 'success');
+        
+    } catch (error) {
+        console.error('Ошибка при удалении заявки:', error);
+        showNotification('Ошибка при удалении заявки', 'error');
+    }
+};
+
+window.completeRequest = function(id) {
+    if (!currentUser) {
+        showAccessError();
+        return;
+    }
+    
+    if (currentUser.type !== 'admin' && currentUser.type !== 'repair') {
+        showNotification('У вас нет прав для завершения ремонтов', 'error');
+        return;
+    }
+    
+    const request = repairRequests.find(req => req.id === id);
+    if (!request) {
+        showNotification('Заявка не найдена', 'error');
+        return;
+    }
+    
+    if (request.status === 'completed') {
+        showNotification('Заявка уже завершена', 'warning');
+        return;
+    }
+    
+    const currentDate = new Date().toISOString().split('T')[0];
+    const currentTime = new Date().toLocaleTimeString('ru-RU', {hour12: false, hour: '2-digit', minute:'2-digit'});
+    
+    const repairEndDate = prompt('Введите дату окончания ремонта (ГГГГ-ММ-ДД):', currentDate);
+    if (!repairEndDate) return;
+    
+    const repairEndTime = prompt('Введите время окончания ремонта (ЧЧ:ММ):', currentTime);
+    if (!repairEndTime) return;
+    
+    const downtimeCount = prompt('Введите количество простоев:', '1') || '1';
+    
+    const downtimeHours = calculateDowntimeHours(
+        request.date, 
+        request.time, 
+        repairEndDate, 
+        repairEndTime
+    );
+    
+    request.status = 'completed';
+    request.repairEndDate = repairEndDate;
+    request.repairEndTime = repairEndTime;
+    request.downtimeCount = parseInt(downtimeCount) || 1;
+    request.downtimeHours = downtimeHours;
+    request.updatedAt = new Date().toISOString();
+    
+    localStorage.setItem('repairRequests', JSON.stringify(repairRequests));
+    
+    renderRepairTable();
+    updateSummary();
+    
+    showNotification(`Ремонт завершен! Время простоя: ${downtimeHours.toFixed(1)} ч`, 'success');
+};
 
 // ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
 
@@ -829,224 +1047,6 @@ function checkConnection() {
         checkConnection();
     });
 }
-
-// ============ ГЛОБАЛЬНЫЕ ФУНКЦИИ ============
-
-// Определение глобальных функций
-window.logout = function() {
-    if (confirm('Вы уверены, что хотите выйти?')) {
-        localStorage.removeItem('currentUser');
-        localStorage.removeItem('isAuthenticated');
-        localStorage.removeItem('equipmentDatabase');
-        localStorage.removeItem('repairRequests');
-        window.location.href = 'login.html';
-    }
-};
-
-window.importEquipmentDB = function() {
-    if (!currentUser) {
-        showAccessError();
-        return;
-    }
-    
-    if (currentUser.type !== 'admin' && currentUser.type !== 'author') {
-        showNotification('У вас нет прав для импорта данных', 'error');
-        return;
-    }
-    
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.csv,.txt,.json';
-    
-    input.onchange = function(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
-            try {
-                const content = e.target.result;
-                
-                if (file.name.endsWith('.csv')) {
-                    equipmentDatabase = parseCSV(content);
-                    showNotification(`Загружено ${equipmentDatabase.length} записей из CSV`, 'success');
-                } else if (file.name.endsWith('.json')) {
-                    const data = JSON.parse(content);
-                    if (Array.isArray(data)) {
-                        equipmentDatabase = data;
-                        showNotification(`Загружено ${equipmentDatabase.length} записей из JSON`, 'success');
-                    } else {
-                        throw new Error('Неверный формат JSON');
-                    }
-                } else {
-                    throw new Error('Неподдерживаемый формат файла');
-                }
-                
-                localStorage.setItem('equipmentDatabase', JSON.stringify(equipmentDatabase));
-                populateInvNumberSelect();
-                populateLocationFilter();
-                
-            } catch (error) {
-                console.error('Ошибка обработки файла:', error);
-                showNotification('Ошибка обработки файла: ' + error.message, 'error');
-            }
-        };
-        
-        reader.readAsText(file);
-    };
-    
-    input.click();
-};
-
-window.exportRepairData = function() {
-    if (!currentUser) {
-        showAccessError();
-        return;
-    }
-    
-    if (currentUser.type !== 'admin') {
-        showNotification('Только администраторы могут экспортировать данные', 'error');
-        return;
-    }
-    
-    if (repairRequests.length === 0) {
-        showNotification('Нет данных для экспорта', 'warning');
-        return;
-    }
-    
-    let csvContent = "Дата;Время;Автор;Участок;Инв.номер;Оборудование;Модель;Номер станка;Неисправность;Дата окончания;Время окончания;Статус;Кол-во простоев;Время простоя;Номенклатура\n";
-    
-    repairRequests.forEach(request => {
-        csvContent += `"${request.date || ''}";"${request.time || ''}";"${request.author || ''}";"${request.location || ''}";"${request.invNumber || ''}";"${request.equipmentName || ''}";"${request.model || ''}";"${request.machineNumber || ''}";"${request.faultDescription || ''}";"${request.repairEndDate || ''}";"${request.repairEndTime || ''}";"${request.status || ''}";"${request.downtimeCount || 0}";"${request.downtimeHours || 0}";"${request.productionItem || ''}"\n`;
-    });
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute("href", url);
-    link.setAttribute("download", `заявки_на_ремонт_${new Date().toISOString().slice(0,10)}.csv`);
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    setTimeout(() => URL.revokeObjectURL(url), 100);
-    
-    showNotification(`Экспортировано ${repairRequests.length} заявок`, 'success');
-};
-
-window.showDashboard = function() {
-    if (!currentUser) {
-        showAccessError();
-        return;
-    }
-    
-    const modal = document.getElementById('dashboardModal');
-    const dashboardContent = document.getElementById('dashboardContent');
-    
-    if (!modal || !dashboardContent) {
-        showNotification('Ошибка открытия дашборда', 'error');
-        return;
-    }
-    
-    dashboardContent.innerHTML = generateDashboardHTML();
-    modal.style.display = 'block';
-};
-
-window.closeDashboard = function() {
-    const modal = document.getElementById('dashboardModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-};
-
-window.deleteRequest = function(id) {
-    if (!currentUser) {
-        showAccessError();
-        return;
-    }
-    
-    if (currentUser.type !== 'admin') {
-        showNotification('Только администраторы могут удалять заявки', 'error');
-        return;
-    }
-    
-    if (!confirm('Вы уверены, что хотите удалить эту заявку?')) {
-        return;
-    }
-    
-    try {
-        repairRequests = repairRequests.filter(request => request.id !== id);
-        localStorage.setItem('repairRequests', JSON.stringify(repairRequests));
-        
-        renderRepairTable();
-        updateSummary();
-        
-        showNotification('Заявка успешно удалена', 'success');
-        
-    } catch (error) {
-        console.error('Ошибка при удалении заявки:', error);
-        showNotification('Ошибка при удалении заявки', 'error');
-    }
-};
-
-window.completeRequest = function(id) {
-    if (!currentUser) {
-        showAccessError();
-        return;
-    }
-    
-    if (currentUser.type !== 'admin' && currentUser.type !== 'repair') {
-        showNotification('У вас нет прав для завершения ремонтов', 'error');
-        return;
-    }
-    
-    const request = repairRequests.find(req => req.id === id);
-    if (!request) {
-        showNotification('Заявка не найдена', 'error');
-        return;
-    }
-    
-    if (request.status === 'completed') {
-        showNotification('Заявка уже завершена', 'warning');
-        return;
-    }
-    
-    const currentDate = new Date().toISOString().split('T')[0];
-    const currentTime = new Date().toLocaleTimeString('ru-RU', {hour12: false, hour: '2-digit', minute:'2-digit'});
-    
-    const repairEndDate = prompt('Введите дату окончания ремонта (ГГГГ-ММ-ДД):', currentDate);
-    if (!repairEndDate) return;
-    
-    const repairEndTime = prompt('Введите время окончания ремонта (ЧЧ:ММ):', currentTime);
-    if (!repairEndTime) return;
-    
-    const downtimeCount = prompt('Введите количество простоев:', '1') || '1';
-    
-    const downtimeHours = calculateDowntimeHours(
-        request.date, 
-        request.time, 
-        repairEndDate, 
-        repairEndTime
-    );
-    
-    request.status = 'completed';
-    request.repairEndDate = repairEndDate;
-    request.repairEndTime = repairEndTime;
-    request.downtimeCount = parseInt(downtimeCount) || 1;
-    request.downtimeHours = downtimeHours;
-    request.updatedAt = new Date().toISOString();
-    
-    localStorage.setItem('repairRequests', JSON.stringify(repairRequests));
-    
-    renderRepairTable();
-    updateSummary();
-    
-    showNotification(`Ремонт завершен! Время простоя: ${downtimeHours.toFixed(1)} ч`, 'success');
-};
 
 // ============ ИНИЦИАЛИЗАЦИЯ ============
 
