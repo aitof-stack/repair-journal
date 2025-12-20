@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход в журнал заявок на ремонт</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 30px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+        
+        .login-title {
+            text-align: center;
+            color: #4CAF50;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #4CAF50;
+        }
+        
+        .user-type-selector {
+            margin-bottom: 20px;
+        }
+        
+        .user-type-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .user-type-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            background: #f9f9f9;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .user-type-btn.active {
+            border-color: #4CAF50;
+            background-color: #e8f5e9;
+            color: #4CAF50;
+        }
+        
+        .user-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #f9f9f9;
+        }
+        
+        .user-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        
+        .user-item:hover {
+            background-color: #e8f5e9;
+        }
+        
+        .user-item.selected {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .password-input {
+            margin-bottom: 20px;
+        }
+        
+        .password-input input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        
+        .login-btn:hover {
+            background-color: #45a049;
+        }
+        
+        .error-message {
+            color: #f44336;
+            text-align: center;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .instructions h3 {
+            margin-top: 0;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1 class="login-title">Вход в журнал заявок</h1>
+        
+        <div class="user-type-selector">
+            <h3>Выберите тип пользователя:</h3>
+            <div class="user-type-buttons">
+                <button class="user-type-btn" data-type="admin">Администратор</button>
+                <button class="user-type-btn" data-type="author">Автор заявки</button>
+                <button class="user-type-btn active" data-type="repair">Ремонтная служба</button>
+            </div>
+        </div>
+        
+        <div id="userSelection">
+            <h3>Выберите ответственного:</h3>
+            <div class="user-list" id="userList">
+                <!-- Список пользователей будет заполнен динамически -->
+            </div>
+        </div>
+        
+        <div id="passwordSection" style="display: none;">
+            <div class="password-input">
+                <label for="password">Пароль:</label>
+                <input type="password" id="password" placeholder="Введите пароль">
+            </div>
+        </div>
+        
+        <button class="login-btn" id="loginBtn">Войти</button>
+        
+        <div class="error-message" id="errorMessage">
+            Неверный пароль. Попробуйте еще раз.
+        </div>
+        
+        <div class="instructions">
+            <h3>Инструкция:</h3>
+            <p><strong>Администраторы:</strong> Полный доступ ко всем функциям</p>
+            <p><strong>Авторы заявок:</strong> Могут создавать заявки, но не удалять их</p>
+            <p><strong>Ремонтная служба:</strong> Могут только завершать ремонты</p>
+            <p><em>Ремонтная служба входит без пароля</em></p>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+</body>
+</html>

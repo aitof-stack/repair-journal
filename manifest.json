@@ -1,0 +1,10 @@
+{
+  "name": "Журнал заявок на ремонт",
+  "short_name": "Ремонтный журнал",
+  "description": "Система учета заявок на ремонт оборудования",
+  "start_url": "login.html",
+  "display": "standalone",
+  "background_color": "#4CAF50",
+  "theme_color": "#4CAF50",
+  "icons": []
+}

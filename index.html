@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#4CAF50">
+    <title>Журнал заявок на ремонт оборудования</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <style>
+        /* Адаптивные стили для мобильных */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+                margin: 5px;
+            }
+            
+            .form-row {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .form-group {
+                min-width: 100%;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                margin-bottom: 5px;
+            }
+            
+            .search-filter {
+                flex-direction: column;
+            }
+            
+            .search-filter input,
+            .search-filter select {
+                min-width: 100%;
+            }
+            
+            .summary {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .summary-item {
+                width: 100%;
+                margin: 3px 0;
+            }
+            
+            .table-container {
+                margin: 10px -10px;
+                width: calc(100% + 20px);
+            }
+        }
+        
+        /* Стили для очень маленьких экранов */
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 20px;
+                margin-bottom: 15px;
+            }
+            
+            h2 {
+                font-size: 18px;
+            }
+            
+            .user-info {
+                position: static;
+                margin-bottom: 15px;
+                justify-content: center;
+            }
+        }
+        
+        /* Общие стили для пользовательской информации */
+        .user-info {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .logout-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .logout-btn:hover {
+            background-color: #d32f2f;
+        }
+        
+        .access-restricted {
+            background-color: #ffebee;
+            border: 1px solid #ffcdd2;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .dashboard-btn {
+            background-color: #9C27B0;
+            margin-left: 10px;
+        }
+        
+        .dashboard-btn:hover {
+            background-color: #7B1FA2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Информация о пользователе -->
+        <div class="user-info" id="userInfo" style="display: none;">
+            <span id="userName"></span>
+            <span id="userRole"></span>
+            <button class="logout-btn" onclick="logout()">Выйти</button>
+        </div>
+        
+        <!-- Заголовок -->
+        <h1 id="pageTitle">Журнал заявок на ремонт оборудования</h1>
+        
+        <!-- Сообщение о недостаточных правах -->
+        <div class="access-restricted" id="accessRestricted" style="display: none;">
+            У вас недостаточно прав для выполнения этого действия.
+        </div>
+        
+        <!-- Форма для добавления новой заявки -->
+        <div class="form-section" id="formSection">
+            <h2>Новая заявка на ремонт</h2>
+            <form id="repairForm">
+                <!-- Поля формы остаются такими же -->
+                <!-- ... -->
+                
+                <div class="button-group">
+                    <button type="submit" class="btn">Добавить заявку</button>
+                    <button type="button" class="btn btn-clear" id="clearBtn">Очистить форму</button>
+                    <button type="button" class="btn btn-load" onclick="importEquipmentDB()">Загрузить базу</button>
+                    <button type="button" class="btn btn-admin" onclick="exportRepairData()">Экспорт</button>
+                    <button type="button" class="btn dashboard-btn" onclick="showDashboard()">Дашборд</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Остальной код остается таким же -->
+        <!-- ... -->
+    </div>
+
+    <script src="javascript.js"></script>
+</body>
+</html>
