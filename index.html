@@ -6,245 +6,45 @@
     <title>Журнал заявок на ремонт оборудования</title>
     <link rel="stylesheet" href="style.css">
     <style>
+        /* Все стили из вашего index (1).html */
         * {
-            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+        
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
         }
         
         body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background-color: #f5f5f5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
         
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
+        /* ОСТАВЬТЕ ВСЕ ОСТАЛЬНЫЕ СТИЛИ ИЗ index (1).html ЗДЕСЬ */
+        /* ... весь CSS из index (1).html ... */
         
-        h1, h2, h3 {
-            color: #333;
-        }
-        
-        h1 {
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #4CAF50;
-        }
-        
-        .user-info {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 6px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        
-        .logout-btn {
-            background-color: #f44336;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .form-section {
-            background-color: #f9f9f9;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 25px;
-            border: 1px solid #ddd;
-        }
-        
-        .form-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .form-group {
-            flex: 1;
-            min-width: 200px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        
-        input, select, textarea {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        
-        textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 20px;
-        }
-        
-        .btn {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .btn-clear {
-            background-color: #ff9800;
-        }
-        
-        .btn-load {
-            background-color: #2196F3;
-        }
-        
-        .btn-admin {
-            background-color: #9C27B0;
-        }
-        
-        .dashboard-btn {
-            background-color: #607D8B;
-        }
-        
-        .search-filter {
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        
-        .search-filter input,
-        .search-filter select {
-            flex: 1;
-            min-width: 150px;
-            padding: 8px;
-        }
-        
-        .summary {
-            background-color: #e8f5e9;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        
-        .summary-item {
-            flex: 1;
-            min-width: 150px;
-        }
-        
-        .table-container {
-            width: 100%;
-            overflow-x: auto;
-            margin-top: 20px;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 1200px;
-        }
-        
-        th, td {
-            padding: 10px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
-        
-        th {
-            background-color: #4CAF50;
-            color: white;
-        }
-        
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-            z-index: 1000;
-        }
-        
-        .modal-content {
-            background-color: white;
-            margin: 50px auto;
-            padding: 20px;
-            width: 90%;
-            max-width: 1000px;
-            max-height: 80vh;
-            overflow-y: auto;
-            border-radius: 8px;
-        }
-        
-        .close {
-            float: right;
-            font-size: 28px;
-            cursor: pointer;
-        }
-        
-        @media (max-width: 768px) {
-            .container {
-                padding: 10px;
-            }
-            
-            .form-row {
-                flex-direction: column;
-            }
-            
-            .button-group {
-                flex-direction: column;
-            }
-            
-            .btn {
-                width: 100%;
-            }
-            
-            .search-filter {
-                flex-direction: column;
-            }
-        }
     </style>
 </head>
 <body>
+    <!-- Проверка авторизации -->
+    <div id="authCheck" style="display: none;"></div>
+    
     <!-- Уведомление -->
     <div class="notification" id="notification"></div>
     
     <!-- Статус соединения -->
     <div class="connection-status" id="connectionStatus">Онлайн</div>
     
-    <div class="container">
+    <div class="container" id="mainContainer" style="display: none;">
         <!-- Информация о пользователе -->
         <div class="user-info" id="userInfo" style="display: none;">
-            <div>
+            <div class="user-info-content">
                 <span id="userName"></span>
                 <span id="userRole"></span>
             </div>
@@ -254,75 +54,24 @@
         <!-- Заголовок -->
         <h1 id="pageTitle">Журнал заявок на ремонт оборудования</h1>
         
+        <!-- Сообщение о недостаточных правах -->
+        <div class="access-restricted" id="accessRestricted" style="display: none;">
+            <strong>Доступ запрещен</strong>
+            <p>У вас недостаточно прав для выполнения этого действия.</p>
+        </div>
+        
         <!-- Форма для добавления новой заявки -->
         <div class="form-section" id="formSection">
             <h2>Новая заявка на ремонт</h2>
             <form id="repairForm">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="date">Дата:</label>
-                        <input type="date" id="date" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="time">Время:</label>
-                        <input type="time" id="time" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="author">Автор заявки:</label>
-                        <input type="text" id="author" required>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="invNumber">Инвентарный номер:</label>
-                        <select id="invNumber" required>
-                            <option value="">Выберите инвентарный номер</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="equipmentName">Оборудование:</label>
-                        <input type="text" id="equipmentName" readonly>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="location">Участок:</label>
-                        <input type="text" id="location" readonly>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="model">Модель:</label>
-                        <input type="text" id="model" readonly>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="machineNumber">Номер станка:</label>
-                        <input type="text" id="machineNumber">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="productionItem">Продукция:</label>
-                        <input type="text" id="productionItem">
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group" style="flex: 2;">
-                        <label for="faultDescription">Неисправность:</label>
-                        <textarea id="faultDescription" required></textarea>
-                    </div>
-                </div>
+                <!-- ВСЯ ФОРМА ИЗ index (1).html -->
+                <!-- ... -->
                 
                 <div class="button-group">
                     <button type="submit" class="btn">Добавить заявку</button>
-                    <button type="button" class="btn btn-clear" id="clearBtn">Очистить</button>
-                    <button type="button" class="btn btn-load" onclick="importEquipmentDB()">Загрузить базу</button>
-                    <button type="button" class="btn btn-admin" onclick="exportRepairData()">Экспорт</button>
+                    <button type="button" class="btn btn-clear" id="clearBtn">Очистить форму</button>
+                    <button type="button" class="btn btn-load" onclick="importEquipmentDB()">Загрузить базу оборудования</button>
+                    <button type="button" class="btn btn-admin" onclick="exportRepairData()">Экспорт заявок</button>
                     <button type="button" class="btn dashboard-btn" onclick="showDashboard()">Дашборд</button>
                 </div>
             </form>
@@ -330,7 +79,7 @@
         
         <!-- Поиск и фильтры -->
         <div class="search-filter" id="searchFilter">
-            <input type="text" id="searchInput" placeholder="Поиск...">
+            <input type="text" id="searchInput" placeholder="Поиск по оборудованию или неисправности...">
             <select id="statusFilter">
                 <option value="all">Все статусы</option>
                 <option value="pending">В ремонте</option>
@@ -339,10 +88,16 @@
             <select id="locationFilter">
                 <option value="all">Все участки</option>
             </select>
-            <input type="month" id="monthFilter">
+            <input type="month" id="monthFilter" placeholder="Фильтр по месяцу">
         </div>
         
-        <!-- Сводная информация -->
+        <!-- Заголовок таблицы и кнопка дашборда -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; margin-bottom: 10px;">
+            <h2>Заявки на ремонт</h2>
+            <button type="button" class="btn dashboard-btn" onclick="showDashboard()" style="margin: 0;">Дашборд</button>
+        </div>
+        
+        <!-- Сводная информация перед таблицей -->
         <div class="summary" id="summarySection">
             <div class="summary-item">
                 <strong>Всего заявок:</strong> <span id="totalRequests">0</span>
@@ -354,30 +109,35 @@
                 <strong>Завершено:</strong> <span id="completedRequests">0</span>
             </div>
             <div class="summary-item">
-                <strong>Время простоя:</strong> <span id="totalDowntime">0 ч</span>
+                <strong>Общее время простоя:</strong> <span id="totalDowntime">0 ч</span>
             </div>
         </div>
         
+        <!-- Подсказка для скролла -->
+        <div class="scroll-hint">
+            <i>Используйте горизонтальную прокрутку для просмотра всех колонок таблицы</i>
+            <span class="scroll-icon">↔</span>
+        </div>
+        
         <!-- Таблица с заявками -->
-        <h2>Заявки на ремонт</h2>
         <div class="table-container">
             <table id="repairTable">
                 <thead>
                     <tr>
-                        <th>Дата и время</th>
-                        <th>Автор</th>
-                        <th>Участок</th>
-                        <th>Инв. номер</th>
-                        <th>Оборудование</th>
+                        <th class="col-datetime">Дата и время начала</th>
+                        <th>Автор заявки</th>
+                        <th class="col-location">Участок</th>
+                        <th class="col-inv">Инв. номер</th>
+                        <th>Наименование оборудования</th>
                         <th>Модель</th>
-                        <th>Номер станка</th>
-                        <th>Неисправность</th>
-                        <th>Дата окончания</th>
-                        <th>Статус</th>
-                        <th>Кол-во простоев</th>
-                        <th>Время простоя</th>
-                        <th>Продукция</th>
-                        <th>Действия</th>
+                        <th class="col-machine">Номер станка</th>
+                        <th>Описание неисправности</th>
+                        <th class="col-datetime">Дата и время окончания ремонта</th>
+                        <th class="col-status">Статус</th>
+                        <th class="col-count">Кол-во простоев</th>
+                        <th class="col-hours">Время простоя (часы)</th>
+                        <th>Номенклатура продукции</th>
+                        <th class="col-actions">Действия</th>
                     </tr>
                 </thead>
                 <tbody id="repairTableBody">
@@ -398,6 +158,37 @@
         </div>
     </div>
 
+    <!-- Экран загрузки -->
+    <div id="loadingScreen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: white; display: flex; justify-content: center; align-items: center; z-index: 9999;">
+        <div style="text-align: center;">
+            <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #4CAF50; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+            <p>Загрузка приложения...</p>
+        </div>
+    </div>
+
     <script src="javascript.js"></script>
+    <script>
+        // Проверка авторизации при загрузке
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                const isAuthenticated = localStorage.getItem('isAuthenticated');
+                const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+                
+                if (!isAuthenticated || !currentUser) {
+                    // Если не авторизован, перенаправляем на страницу входа
+                    window.location.href = 'login.html';
+                } else {
+                    // Если авторизован, показываем контент
+                    document.getElementById('loadingScreen').style.display = 'none';
+                    document.getElementById('mainContainer').style.display = 'block';
+                    
+                    // Инициализируем приложение
+                    if (typeof initApp === 'function') {
+                        initApp();
+                    }
+                }
+            }, 500);
+        });
+    </script>
 </body>
 </html>
