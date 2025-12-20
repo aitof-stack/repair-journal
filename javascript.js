@@ -1,7 +1,7 @@
 // ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С АВТОЗАГРУЗКОЙ БАЗЫ
 
 // Константы
-const APP_VERSION = '2.0.3';
+const APP_VERSION = '2.0.4';
 const APP_NAME = 'Ремонтный журнал';
 const EQUIPMENT_DB_URL = 'https://raw.githubusercontent.com/aitof-stack/repair-journal/main/data/equipment_database.csv';
 const STORAGE_KEYS = {
@@ -649,7 +649,7 @@ function loadRepairRequests() {
     updateSummary();
 }
 
-// Парсинг CSV с GitHub
+// Парсинг CSV с GitHub - ИСПРАВЛЕННАЯ ВЕРСИЯ
 function parseCSV(csvContent) {
     const equipment = [];
     const lines = csvContent.split('\n');
@@ -659,51 +659,118 @@ function parseCSV(csvContent) {
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         
-        if (!line || line.startsWith('#')) continue; // Пропускаем пустые строки и комментарии
+        // Пропускаем пустые строки и строки без точки с запятой
+        if (!line || !line.includes(';')) continue;
         
         try {
-            // Обрабатываем CSV с кавычками
-            let parts = [];
-            let current = '';
-            let inQuotes = false;
+            // Простой парсинг CSV - разделяем по точке с запятой
+            const parts = line.split(';');
             
-            for (let char of line) {
-                if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === ';' && !inQuotes) {
-                    parts.push(current.trim());
-                    current = '';
-                } else {
-                    current += char;
-                }
-            }
-            parts.push(current.trim());
-            
-            // Удаляем кавычки из значений
-            parts = parts.map(part => part.replace(/^"|"$/g, '').trim());
-            
+            // Проверяем количество частей и наличие данных
             if (parts.length >= 5) {
                 const item = {
-                    location: parts[0] || '',
-                    invNumber: parts[1] || '',
-                    name: parts[2] || '',
-                    model: parts[3] || '-',
-                    machineNumber: parts[4] || '-'
+                    location: (parts[0] || '').replace(/"/g, '').trim(),
+                    invNumber: (parts[1] || '').replace(/"/g, '').trim(),
+                    name: (parts[2] || '').replace(/"/g, '').trim(),
+                    model: (parts[3] || '').replace(/"/g, '').trim() || '-',
+                    machineNumber: (parts[4] || '').replace(/"/g, '').trim() || '-'
                 };
                 
-                // Проверяем, что это валидная запись (есть инвентарный номер и название)
+                // Проверяем, что это валидная запись (есть инвентарный номер)
                 if (item.invNumber && item.name) {
-                    equipment.push(item);
+                    // Если название слишком короткое, может быть это заголовок
+                    if (item.name.length > 2 && !item.name.toLowerCase().includes('наименование')) {
+                        equipment.push(item);
+                    }
+                }
+            } else if (parts.length === 1 && parts[0].includes(',')) {
+                // Альтернативный формат CSV с запятыми
+                const altParts = line.split(',');
+                if (altParts.length >= 5) {
+                    const item = {
+                        location: (altParts[0] || '').replace(/"/g, '').trim(),
+                        invNumber: (altParts[1] || '').replace(/"/g, '').trim(),
+                        name: (altParts[2] || '').replace(/"/g, '').trim(),
+                        model: (altParts[3] || '').replace(/"/g, '').trim() || '-',
+                        machineNumber: (altParts[4] || '').replace(/"/g, '').trim() || '-'
+                    };
+                    
+                    if (item.invNumber && item.name && item.name.length > 2) {
+                        equipment.push(item);
+                    }
                 }
             }
         } catch (error) {
-            console.warn('Ошибка парсинга строки CSV:', line, error);
+            console.warn('Ошибка парсинга строки CSV:', line.substring(0, 50) + '...', error);
             continue;
         }
     }
     
     console.log('Успешно распарсено записей:', equipment.length);
+    
+    // Если не удалось распарсить, пробуем альтернативный подход
+    if (equipment.length === 0) {
+        console.log('Пробуем альтернативный метод парсинга...');
+        return parseCSVAlternative(csvContent);
+    }
+    
     return equipment;
+}
+
+// Альтернативный метод парсинга CSV
+function parseCSVAlternative(csvContent) {
+    const equipment = [];
+    const lines = csvContent.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        if (!line) continue;
+        
+        // Пробуем разные разделители
+        let parts = [];
+        
+        // Сначала пробуем точку с запятой
+        if (line.includes(';')) {
+            parts = line.split(';');
+        }
+        // Потом пробуем запятую
+        else if (line.includes(',')) {
+            parts = line.split(',');
+        }
+        // Потом пробуем табуляцию
+        else if (line.includes('\t')) {
+            parts = line.split('\t');
+        }
+        
+        if (parts.length >= 5) {
+            const item = {
+                location: cleanCSVValue(parts[0]),
+                invNumber: cleanCSVValue(parts[1]),
+                name: cleanCSVValue(parts[2]),
+                model: cleanCSVValue(parts[3]) || '-',
+                machineNumber: cleanCSVValue(parts[4]) || '-'
+            };
+            
+            // Проверяем, что это не заголовок
+            if (item.invNumber && 
+                item.name && 
+                item.name.length > 2 && 
+                !isNaN(parseInt(item.invNumber))) {
+                equipment.push(item);
+            }
+        }
+    }
+    
+    console.log('Альтернативным методом распарсено:', equipment.length, 'записей');
+    return equipment;
+}
+
+// Очистка значения CSV
+function cleanCSVValue(value) {
+    if (!value) return '';
+    // Удаляем кавычки и лишние пробелы
+    return value.toString().replace(/^["']|["']$/g, '').trim();
 }
 
 // Тестовые данные оборудования (используются если GitHub недоступен)
@@ -841,7 +908,18 @@ function populateInvNumberSelect() {
         return numA - numB;
     });
     
+    // Убираем дубликаты по инвентарному номеру
+    const uniqueEquipment = [];
+    const seen = new Set();
+    
     equipmentDatabase.forEach(equipment => {
+        if (!seen.has(equipment.invNumber) && equipment.invNumber) {
+            seen.add(equipment.invNumber);
+            uniqueEquipment.push(equipment);
+        }
+    });
+    
+    uniqueEquipment.forEach(equipment => {
         const option = document.createElement('option');
         option.value = equipment.invNumber;
         
@@ -873,7 +951,15 @@ function populateLocationFilter() {
     
     if (equipmentDatabase.length === 0) return;
     
-    const locations = [...new Set(equipmentDatabase.map(item => item.location).filter(loc => loc))];
+    // Убираем дубликаты и сортируем
+    const locationsSet = new Set();
+    equipmentDatabase.forEach(item => {
+        if (item.location && item.location.trim()) {
+            locationsSet.add(item.location.trim());
+        }
+    });
+    
+    const locations = Array.from(locationsSet);
     locations.sort((a, b) => {
         const numA = parseInt(a) || 0;
         const numB = parseInt(b) || 0;
