@@ -1,37 +1,33 @@
-// ============================================
 // ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ
-// ============================================
 
-// КОНСТАНТЫ
+// Константы
 const APP_VERSION = '2.0.0';
 const APP_NAME = 'Ремонтный журнал';
 const EQUIPMENT_DB_URL = 'data/equipment_database.csv';
 
-// ПЕРЕМЕННЫЕ
+// Переменные приложения
 let equipmentDatabase = [];
 let repairRequests = [];
 let currentUser = null;
 let isOnline = true;
 
-// DOM ЭЛЕМЕНТЫ
+// DOM элементы
 let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
 let machineNumberInput, authorInput, clearBtn, repairTableBody, searchInput;
 let statusFilter, locationFilter, monthFilter, totalRequestsElement;
 let pendingRequestsElement, completedRequestsElement, totalDowntimeElement;
 
-// ============================================
-// ИНИЦИАЛИЗАЦИЯ
-// ============================================
+// ============ ИНИЦИАЛИЗАЦИЯ ============
 
-// Запуск приложения при загрузке DOM
+// Запуск при загрузке DOM
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM загружен, запускаем приложение...');
+    console.log('Приложение запускается...');
     initApp();
 });
 
 // Основная функция инициализации
 function initApp() {
-    console.log(`${APP_NAME} v${APP_VERSION} запускается...`);
+    console.log(`${APP_NAME} v${APP_VERSION}`);
     
     // Инициализация DOM элементов
     initDOMElements();
@@ -107,20 +103,13 @@ function setupRoleBasedUI() {
         authorInput.style.backgroundColor = '#f0f0f0';
     }
     
-    // Для ремонтной службы скрываем лишние элементы
+    // Для ремонтной службы скрываем форму добавления
     if (currentUser.type === 'repair') {
         const formSection = document.getElementById('formSection');
         const searchFilter = document.getElementById('searchFilter');
-        const summarySection = document.getElementById('summarySection');
         
         if (formSection) formSection.style.display = 'none';
         if (searchFilter) searchFilter.style.display = 'none';
-        if (summarySection) summarySection.style.display = 'none';
-        
-        const pageTitle = document.getElementById('pageTitle');
-        if (pageTitle) {
-            pageTitle.textContent = 'Журнал заявок на ремонт оборудования';
-        }
     }
     
     window.currentUser = currentUser;
@@ -149,9 +138,7 @@ function getRoleName(roleType) {
     return roles[roleType] || 'Пользователь';
 }
 
-// ============================================
-// ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ КНОПОК
-// ============================================
+// ============ ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ КНОПОК ============
 
 // Выход из системы
 window.logout = function() {
@@ -166,6 +153,11 @@ window.logout = function() {
 window.importEquipmentDB = function() {
     if (!currentUser) {
         showAccessError();
+        return;
+    }
+    
+    if (currentUser.type !== 'admin' && currentUser.type !== 'author') {
+        showNotification('У вас нет прав для импорта данных', 'error');
         return;
     }
     
@@ -199,7 +191,6 @@ window.importEquipmentDB = function() {
                 }
                 
                 localStorage.setItem('equipmentDatabase', JSON.stringify(equipmentDatabase));
-                
                 populateInvNumberSelect();
                 populateLocationFilter();
                 
@@ -217,6 +208,16 @@ window.importEquipmentDB = function() {
 
 // Экспорт заявок
 window.exportRepairData = function() {
+    if (!currentUser) {
+        showAccessError();
+        return;
+    }
+    
+    if (currentUser.type !== 'admin') {
+        showNotification('Только администраторы могут экспортировать данные', 'error');
+        return;
+    }
+    
     if (repairRequests.length === 0) {
         showNotification('Нет данных для экспорта', 'warning');
         return;
@@ -247,6 +248,11 @@ window.exportRepairData = function() {
 
 // Показать дашборд
 window.showDashboard = function() {
+    if (!currentUser) {
+        showAccessError();
+        return;
+    }
+    
     const modal = document.getElementById('dashboardModal');
     const dashboardContent = document.getElementById('dashboardContent');
     
@@ -274,8 +280,8 @@ window.deleteRequest = function(id) {
         return;
     }
     
-    if (!currentUser.permissions.canDelete) {
-        showNotification('У вас нет прав для удаления заявок', 'error');
+    if (currentUser.type !== 'admin') {
+        showNotification('Только администраторы могут удалять заявки', 'error');
         return;
     }
     
@@ -305,7 +311,7 @@ window.completeRequest = function(id) {
         return;
     }
     
-    if (!currentUser.permissions.canComplete) {
+    if (currentUser.type !== 'admin' && currentUser.type !== 'repair') {
         showNotification('У вас нет прав для завершения ремонтов', 'error');
         return;
     }
@@ -313,6 +319,11 @@ window.completeRequest = function(id) {
     const request = repairRequests.find(req => req.id === id);
     if (!request) {
         showNotification('Заявка не найдена', 'error');
+        return;
+    }
+    
+    if (request.status === 'completed') {
+        showNotification('Заявка уже завершена', 'warning');
         return;
     }
     
@@ -349,9 +360,7 @@ window.completeRequest = function(id) {
     showNotification(`Ремонт завершен! Время простоя: ${downtimeHours.toFixed(1)} ч`, 'success');
 };
 
-// ============================================
-// ЗАГРУЗКА ДАННЫХ
-// ============================================
+// ============ ЗАГРУЗКА ДАННЫХ ============
 
 // Загрузка всех данных
 async function loadAllData() {
@@ -448,9 +457,7 @@ function getDefaultEquipmentDatabase() {
     ];
 }
 
-// ============================================
-// ИНТЕРФЕЙС
-// ============================================
+// ============ ИНТЕРФЕЙС ============
 
 // Настройка интерфейса
 function setupInterface() {
@@ -472,9 +479,6 @@ function setupInterface() {
     
     // Добавить обработчики событий
     addEventListeners();
-    
-    // Добавить поиск в выпадающий список
-    addSearchToSelect();
 }
 
 // Заполнение выпадающего списка инвентарных номеров
@@ -565,74 +569,7 @@ function addEventListeners() {
     if (monthFilter) monthFilter.addEventListener('change', applyFilters);
 }
 
-// ============================================
-// ПОИСК В ВЫПАДАЮЩЕМ СПИСКЕ
-// ============================================
-
-// Добавить поиск в select
-function addSearchToSelect() {
-    const invNumberSearch = document.getElementById('invNumberSearch');
-    const invNumberSelectElement = document.getElementById('invNumber');
-    
-    if (!invNumberSearch || !invNumberSelectElement) return;
-    
-    window.allEquipmentOptions = [];
-    
-    // Сохраняем все опции
-    equipmentDatabase.forEach(equipment => {
-        const option = document.createElement('option');
-        option.value = equipment.invNumber;
-        
-        const shortName = equipment.name.length > 40 
-            ? equipment.name.substring(0, 40) + '...' 
-            : equipment.name;
-        
-        option.textContent = `${equipment.invNumber} - ${shortName}`;
-        option.title = `${equipment.location} | ${equipment.name} (${equipment.model}) | Станок: ${equipment.machineNumber}`;
-        
-        window.allEquipmentOptions.push({
-            element: option,
-            text: option.textContent.toLowerCase(),
-            value: equipment.invNumber,
-            equipment: equipment
-        });
-    });
-    
-    // Функция фильтрации
-    function filterOptions(searchTerm) {
-        const term = searchTerm.toLowerCase();
-        invNumberSelectElement.innerHTML = '<option value="">Выберите инвентарный номер</option>';
-        
-        window.allEquipmentOptions.forEach(option => {
-            if (option.text.includes(term) || option.value.includes(term)) {
-                invNumberSelectElement.appendChild(option.element.cloneNode(true));
-            }
-        });
-        
-        if (invNumberSelectElement.options.length > 1) {
-            invNumberSelectElement.selectedIndex = 1;
-            handleInvNumberChange.call(invNumberSelectElement);
-        } else {
-            invNumberSelectElement.selectedIndex = 0;
-            if (equipmentNameInput) equipmentNameInput.value = '';
-            if (locationInput) locationInput.value = '';
-            if (modelInput) modelInput.value = '';
-            if (machineNumberInput) machineNumberInput.value = '';
-        }
-    }
-    
-    // Обработчик поиска
-    invNumberSearch.addEventListener('input', function() {
-        filterOptions(this.value);
-    });
-    
-    // Инициализация
-    filterOptions('');
-}
-
-// ============================================
-// ОБРАБОТЧИКИ СОБЫТИЙ
-// ============================================
+// ============ ОБРАБОТЧИКИ СОБЫТИЙ ============
 
 // Изменение инвентарного номера
 function handleInvNumberChange() {
@@ -667,7 +604,7 @@ function handleFormSubmit(e) {
         return;
     }
     
-    if (!currentUser.permissions.canAdd) {
+    if (currentUser.type !== 'admin' && currentUser.type !== 'author') {
         showNotification('У вас нет прав для добавления заявок', 'error');
         return;
     }
@@ -786,20 +723,6 @@ function clearForm() {
         invSelect.selectedIndex = 0;
         handleInvNumberChange.call(invSelect);
     }
-    
-    const searchInput = document.getElementById('invNumberSearch');
-    if (searchInput) {
-        searchInput.value = '';
-    }
-    
-    // Обновить поисковый список
-    if (window.allEquipmentOptions) {
-        const invNumberSelectElement = document.getElementById('invNumber');
-        invNumberSelectElement.innerHTML = '<option value="">Выберите инвентарный номер</option>';
-        window.allEquipmentOptions.forEach(option => {
-            invNumberSelectElement.appendChild(option.element.cloneNode(true));
-        });
-    }
 }
 
 // Вычисление времени простоя
@@ -829,9 +752,7 @@ function calculateDowntimeHours(startDate, startTime, endDate, endTime) {
     }
 }
 
-// ============================================
-// ОТОБРАЖЕНИЕ ТАБЛИЦЫ
-// ============================================
+// ============ ОТОБРАЖЕНИЕ ТАБЛИЦЫ ============
 
 // Отобразить таблицу заявок
 function renderRepairTable(filteredRequests = null) {
@@ -887,14 +808,12 @@ function renderRepairTable(filteredRequests = null) {
         
         let actionButtons = '';
         
-        const canDelete = currentUser && currentUser.permissions.canDelete;
-        const canComplete = currentUser && currentUser.permissions.canComplete;
-        
-        if (canDelete) {
+        if (currentUser && currentUser.type === 'admin') {
             actionButtons += `<button class="btn btn-delete" onclick="deleteRequest(${request.id})" title="Удалить">Удалить</button>`;
         }
         
-        if (request.status === 'pending' && canComplete) {
+        if (request.status === 'pending' && currentUser && 
+            (currentUser.type === 'admin' || currentUser.type === 'repair')) {
             actionButtons += `<button class="btn" style="background-color: #2196F3; padding: 6px 12px; font-size: 13px;" onclick="completeRequest(${request.id})" title="Завершить ремонт">Завершить</button>`;
         }
         
@@ -955,9 +874,7 @@ function truncateText(text, maxLength) {
     return text.substring(0, maxLength) + '...';
 }
 
-// ============================================
-// ФИЛЬТРАЦИЯ
-// ============================================
+// ============ ФИЛЬТРАЦИЯ ============
 
 // Применить фильтры
 function applyFilters() {
@@ -1002,9 +919,7 @@ function applyFilters() {
     renderRepairTable(filtered);
 }
 
-// ============================================
-// ДАШБОРД
-// ============================================
+// ============ ДАШБОРД ============
 
 // Генерация HTML дашборда
 function generateDashboardHTML() {
@@ -1098,7 +1013,7 @@ function calculateDashboardStats() {
         : '0.0';
     
     // Текущий месяц
-    const currentMonth = new Date().toISOString().slice(0, 7); // ГГГГ-ММ
+    const currentMonth = new Date().toISOString().slice(0, 7);
     const thisMonthRequests = repairRequests.filter(req => {
         return req.date && req.date.startsWith(currentMonth);
     }).length;
@@ -1155,9 +1070,7 @@ function calculateDashboardStats() {
     };
 }
 
-// ============================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-// ============================================
+// ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
 
 // Проверка соединения
 function checkConnection() {
@@ -1228,18 +1141,6 @@ function showAccessError() {
     }, 2000);
 }
 
-// ============================================
-// ЗАВЕРШЕНИЕ КОДА
-// ============================================
-
-// Инициализация при загрузке окна
-window.addEventListener('load', function() {
-    console.log('Окно полностью загружено');
-    
-    // Добавить CSS для новых элементов
-    addDashboardStyles();
-});
-
 // Добавление стилей для дашборда
 function addDashboardStyles() {
     const styles = `
@@ -1283,4 +1184,10 @@ function addDashboardStyles() {
     document.head.appendChild(styleElement);
 }
 
-console.log('Приложение полностью загружено и готово к работе!');
+// Инициализация при полной загрузке окна
+window.addEventListener('load', function() {
+    console.log('Окно полностью загружено');
+    addDashboardStyles();
+});
+
+console.log('Приложение готово к работе!');
