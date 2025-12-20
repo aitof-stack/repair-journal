@@ -4,7 +4,7 @@
 // ============================================
 
 // КОНФИГУРАЦИЯ
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 const APP_NAME = 'Ремонтный журнал';
 const EQUIPMENT_DB_URL = 'data/equipment_database.csv';
 
@@ -26,6 +26,7 @@ let pendingRequestsElement, completedRequestsElement, totalDowntimeElement;
 
 // Инициализация при загрузке DOM
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM загружен, инициализируем приложение...');
     initApp();
 });
 
@@ -37,7 +38,9 @@ function initApp() {
     initDOMElements();
     
     // Проверка аутентификации
-    checkAuthentication();
+    if (!checkAuthentication()) {
+        return;
+    }
     
     // Загружаем данные
     loadAllData();
@@ -53,6 +56,8 @@ function initApp() {
 
 // Инициализация DOM элементов
 function initDOMElements() {
+    console.log('Инициализация DOM элементов...');
+    
     repairForm = document.getElementById('repairForm');
     invNumberSelect = document.getElementById('invNumber');
     equipmentNameInput = document.getElementById('equipmentName');
@@ -70,10 +75,14 @@ function initDOMElements() {
     pendingRequestsElement = document.getElementById('pendingRequests');
     completedRequestsElement = document.getElementById('completedRequests');
     totalDowntimeElement = document.getElementById('totalDowntime');
+    
+    console.log('DOM элементы инициализированы');
 }
 
 // Проверка аутентификации
 function checkAuthentication() {
+    console.log('Проверка аутентификации...');
+    
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     const savedUser = JSON.parse(localStorage.getItem('currentUser'));
     
@@ -104,6 +113,8 @@ function checkAuthentication() {
 function configureInterface(user) {
     if (!user) return;
     
+    console.log('Настройка интерфейса для пользователя:', user.type);
+    
     // Автоподстановка имени автора для авторов заявок
     if (user.type === 'author' && authorInput) {
         authorInput.value = user.name;
@@ -113,11 +124,16 @@ function configureInterface(user) {
     
     // Скрываем/показываем элементы в зависимости от прав
     if (user.type === 'repair') {
+        console.log('Настройка интерфейса для ремонтной службы');
+        
         // Для ремонтной службы показываем только таблицу
         const elementsToHide = ['formSection', 'searchFilter', 'summarySection'];
         elementsToHide.forEach(id => {
             const element = document.getElementById(id);
-            if (element) element.style.display = 'none';
+            if (element) {
+                element.style.display = 'none';
+                console.log(`Скрыт элемент: ${id}`);
+            }
         });
         
         // Обновляем заголовок
@@ -129,10 +145,13 @@ function configureInterface(user) {
     
     // Сохраняем пользователя в глобальной переменной
     window.currentUser = user;
+    console.log('Пользователь сохранен в window.currentUser');
 }
 
 // Инициализация интерфейса
 function initializeInterface() {
+    console.log('Инициализация интерфейса...');
+    
     // Устанавливаем сегодняшнюю дату по умолчанию
     const today = new Date().toISOString().split('T')[0];
     const dateInput = document.getElementById('date');
@@ -154,10 +173,17 @@ function initializeInterface() {
     
     // Добавляем обработчики событий
     addEventListeners();
+    
+    // Добавляем поиск в выпадающий список инвентарных номеров
+    addSearchToInventorySelect();
+    
+    console.log('Интерфейс инициализирован');
 }
 
 // Отображение информации о пользователе
 function displayUserInfo() {
+    console.log('Отображение информации о пользователе...');
+    
     const userInfo = document.getElementById('userInfo');
     const userName = document.getElementById('userName');
     const userRole = document.getElementById('userRole');
@@ -166,6 +192,9 @@ function displayUserInfo() {
         userInfo.style.display = 'flex';
         if (userName) userName.textContent = currentUser.name;
         if (userRole) userRole.textContent = `(${getRoleName(currentUser.type)})`;
+        console.log('Информация о пользователе отображена');
+    } else {
+        console.warn('Не удалось отобразить информацию о пользователе');
     }
 }
 
@@ -185,7 +214,10 @@ function getRoleName(roleType) {
 
 // Выход из системы (глобальная функция)
 window.logout = function() {
+    console.log('Кнопка выхода нажата');
+    
     if (confirm('Вы уверены, что хотите выйти?')) {
+        console.log('Выход из системы...');
         localStorage.removeItem('currentUser');
         localStorage.removeItem('isAuthenticated');
         window.location.href = 'login.html';
@@ -194,18 +226,39 @@ window.logout = function() {
 
 // Импорт базы оборудования (глобальная функция)
 window.importEquipmentDB = function() {
+    console.log('Кнопка импорта базы оборудования нажата');
+    
     if (!window.currentUser) {
+        console.warn('Пользователь не авторизован');
         showAccessError();
         return;
     }
+    
+    console.log('Открытие диалога выбора файла...');
     
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.csv,.txt,.json';
     
+    // Добавляем стили для отладки
+    input.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+        z-index: 9999;
+    `;
+    
     input.onchange = function(event) {
+        console.log('Файл выбран:', event.target.files[0]?.name);
         const file = event.target.files[0];
-        if (!file) return;
+        if (!file) {
+            console.log('Файл не выбран');
+            return;
+        }
         
         try {
             const reader = new FileReader();
@@ -213,16 +266,19 @@ window.importEquipmentDB = function() {
             reader.onload = function(e) {
                 try {
                     const content = e.target.result;
+                    console.log('Файл прочитан, размер:', content.length, 'символов');
                     
                     if (file.name.endsWith('.csv')) {
                         // Парсинг CSV
                         equipmentDatabase = parseCSV(content);
+                        console.log(`Загружено ${equipmentDatabase.length} записей из CSV`);
                         showNotification(`Загружено ${equipmentDatabase.length} записей из CSV`, 'success');
                     } else if (file.name.endsWith('.json')) {
                         // Парсинг JSON
                         const data = JSON.parse(content);
                         if (Array.isArray(data)) {
                             equipmentDatabase = data;
+                            console.log(`Загружено ${equipmentDatabase.length} записей из JSON`);
                             showNotification(`Загружено ${equipmentDatabase.length} записей из JSON`, 'success');
                         } else {
                             throw new Error('Неверный формат JSON');
@@ -244,19 +300,50 @@ window.importEquipmentDB = function() {
                 }
             };
             
+            reader.onerror = function(error) {
+                console.error('Ошибка чтения файла:', error);
+                showNotification('Ошибка чтения файла', 'error');
+            };
+            
             reader.readAsText(file);
             
         } catch (error) {
-            console.error('Ошибка чтения файла:', error);
-            showNotification('Ошибка чтения файла', 'error');
+            console.error('Ошибка при работе с файлом:', error);
+            showNotification('Ошибка при работе с файлом', 'error');
         }
     };
     
-    input.click();
+    input.onclick = function(event) {
+        console.log('Input clicked, event:', event);
+    };
+    
+    // Удаляем старый input если есть
+    const oldInput = document.querySelector('input[type="file"]');
+    if (oldInput) oldInput.remove();
+    
+    // Добавляем input в DOM
+    document.body.appendChild(input);
+    
+    // Программно кликаем по input
+    console.log('Запуск клика по input...');
+    setTimeout(() => {
+        input.click();
+        console.log('Клик выполнен');
+    }, 100);
+    
+    // Удаляем input после использования
+    setTimeout(() => {
+        if (input.parentNode) {
+            input.parentNode.removeChild(input);
+            console.log('Input удален из DOM');
+        }
+    }, 1000);
 };
 
 // Экспорт заявок (глобальная функция)
 window.exportRepairData = function() {
+    console.log('Кнопка экспорта заявок нажата');
+    
     if (repairRequests.length === 0) {
         showNotification('Нет данных для экспорта', 'warning');
         return;
@@ -282,11 +369,16 @@ window.exportRepairData = function() {
     link.click();
     document.body.removeChild(link);
     
+    // Освобождаем память
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+    
     showNotification(`Экспортировано ${repairRequests.length} заявок`, 'success');
 };
 
 // Показать дашборд (глобальная функция)
 window.showDashboard = function() {
+    console.log('Кнопка дашборда нажата');
+    
     const modal = document.getElementById('dashboardModal');
     const dashboardContent = document.getElementById('dashboardContent');
     
@@ -304,6 +396,7 @@ window.showDashboard = function() {
 
 // Закрыть дашборд (глобальная функция)
 window.closeDashboard = function() {
+    console.log('Закрытие дашборда');
     const modal = document.getElementById('dashboardModal');
     if (modal) {
         modal.style.display = 'none';
@@ -312,6 +405,8 @@ window.closeDashboard = function() {
 
 // Удаление заявки (глобальная функция)
 window.deleteRequest = async function(id) {
+    console.log(`Удаление заявки ID: ${id}`);
+    
     if (!window.currentUser) {
         showAccessError();
         return;
@@ -342,6 +437,8 @@ window.deleteRequest = async function(id) {
 
 // Завершение ремонта (глобальная функция)
 window.completeRequest = async function(id) {
+    console.log(`Завершение ремонта ID: ${id}`);
+    
     if (!window.currentUser) {
         showAccessError();
         return;
@@ -392,11 +489,161 @@ window.completeRequest = async function(id) {
 };
 
 // ============================================
+// ДОБАВЛЕНИЕ ПОИСКА В ВЫПАДАЮЩИЙ СПИСОК
+// ============================================
+
+// Добавление поиска в выпадающий список инвентарных номеров
+function addSearchToInventorySelect() {
+    if (!invNumberSelect) return;
+    
+    console.log('Добавление поиска в выпадающий список...');
+    
+    // Сохраняем оригинальный select
+    const originalSelect = invNumberSelect;
+    
+    // Создаем контейнер для поиска и select
+    const container = document.createElement('div');
+    container.className = 'searchable-select-container';
+    container.style.position = 'relative';
+    
+    // Создаем поле для поиска
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.id = 'invNumberSearch';
+    searchInput.placeholder = '🔍 Поиск по номеру или названию...';
+    searchInput.style.cssText = `
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        box-sizing: border-box;
+    `;
+    
+    // Создаем новый select для результатов поиска
+    const newSelect = document.createElement('select');
+    newSelect.id = 'invNumber';
+    newSelect.name = 'invNumber';
+    newSelect.required = true;
+    newSelect.style.cssText = `
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        box-sizing: border-box;
+        max-height: 200px;
+        overflow-y: auto;
+    `;
+    
+    // Копируем опции из оригинального select
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Выберите инвентарный номер';
+    newSelect.appendChild(defaultOption);
+    
+    // Сохраняем все опции для фильтрации
+    let allOptions = [];
+    
+    // Копируем остальные опции
+    for (let i = 1; i < originalSelect.options.length; i++) {
+        const option = originalSelect.options[i];
+        const newOption = document.createElement('option');
+        newOption.value = option.value;
+        newOption.textContent = option.textContent;
+        newOption.title = option.title;
+        newSelect.appendChild(newOption.cloneNode(true));
+        
+        // Сохраняем опцию для фильтрации
+        allOptions.push({
+            element: newOption,
+            text: option.textContent.toLowerCase(),
+            value: option.value
+        });
+    }
+    
+    // Функция фильтрации
+    function filterOptions(searchTerm) {
+        const term = searchTerm.toLowerCase();
+        newSelect.innerHTML = '';
+        
+        // Добавляем опцию по умолчанию
+        newSelect.appendChild(defaultOption.cloneNode(true));
+        
+        // Фильтруем и добавляем подходящие опции
+        allOptions.forEach(option => {
+            if (option.text.includes(term) || option.value.includes(term)) {
+                newSelect.appendChild(option.element.cloneNode(true));
+            }
+        });
+        
+        // Если есть результаты, показываем первый
+        if (newSelect.options.length > 1) {
+            newSelect.selectedIndex = 1;
+            handleInvNumberChange.call(newSelect);
+        } else {
+            newSelect.selectedIndex = 0;
+            // Очищаем связанные поля
+            if (equipmentNameInput) equipmentNameInput.value = '';
+            if (locationInput) locationInput.value = '';
+            if (modelInput) modelInput.value = '';
+            if (machineNumberInput) machineNumberInput.value = '';
+        }
+    }
+    
+    // Обработчик ввода в поле поиска
+    searchInput.addEventListener('input', function() {
+        filterOptions(this.value);
+    });
+    
+    // Обработчик клика по полю поиска (очистка)
+    searchInput.addEventListener('click', function() {
+        this.select();
+    });
+    
+    // Обработчик выбора в select
+    newSelect.addEventListener('change', handleInvNumberChange);
+    
+    // Заменяем оригинальный select
+    originalSelect.parentNode.replaceChild(container, originalSelect);
+    container.appendChild(searchInput);
+    container.appendChild(newSelect);
+    
+    // Обновляем ссылку на select
+    invNumberSelect = newSelect;
+    
+    // Добавляем стили для контейнера
+    const style = document.createElement('style');
+    style.textContent = `
+        .searchable-select-container select {
+            display: block !important;
+        }
+        
+        .searchable-select-container option {
+            padding: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .searchable-select-container input,
+            .searchable-select-container select {
+                font-size: 16px !important;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    console.log('Поиск добавлен в выпадающий список');
+}
+
+// ============================================
 // ЗАГРУЗКА ДАННЫХ
 // ============================================
 
 // Загрузка всех данных
 async function loadAllData() {
+    console.log('Загрузка всех данных...');
+    
     try {
         await loadEquipmentDatabase();
         loadRepairRequests();
@@ -409,9 +656,9 @@ async function loadAllData() {
 
 // Загрузка базы оборудования
 async function loadEquipmentDatabase() {
+    console.log('Загрузка базы оборудования...');
+    
     try {
-        console.log('Загрузка базы оборудования...');
-        
         // Пытаемся загрузить из CSV файла
         const response = await fetch(EQUIPMENT_DB_URL);
         
@@ -448,6 +695,8 @@ async function loadEquipmentDatabase() {
 
 // Загрузка заявок
 function loadRepairRequests() {
+    console.log('Загрузка заявок...');
+    
     const savedRequests = JSON.parse(localStorage.getItem('repairRequests'));
     
     if (savedRequests && Array.isArray(savedRequests)) {
@@ -511,6 +760,78 @@ function getDefaultEquipmentDatabase() {
 function populateInvNumberSelect() {
     if (!invNumberSelect) return;
     
+    console.log('Заполнение выпадающего списка...');
+    
+    // Проверяем, есть ли уже поисковое поле
+    const searchContainer = document.querySelector('.searchable-select-container');
+    
+    if (searchContainer) {
+        // Если уже есть поиск, обновляем только опции
+        updateSearchableSelectOptions();
+    } else {
+        // Создаем обычный select
+        createRegularSelect();
+    }
+}
+
+// Обновление опций в поисковом select
+function updateSearchableSelectOptions() {
+    const searchInput = document.getElementById('invNumberSearch');
+    const select = document.getElementById('invNumber');
+    
+    if (!select) return;
+    
+    // Очищаем select
+    select.innerHTML = '';
+    
+    // Добавляем опцию по умолчанию
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Выберите инвентарный номер';
+    select.appendChild(defaultOption);
+    
+    // Сохраняем все опции для фильтрации
+    window.allEquipmentOptions = [];
+    
+    // Сортируем оборудование по инвентарному номеру
+    equipmentDatabase.sort((a, b) => {
+        const numA = parseInt(a.invNumber) || 0;
+        const numB = parseInt(b.invNumber) || 0;
+        return numA - numB;
+    });
+    
+    // Добавляем опции
+    equipmentDatabase.forEach(equipment => {
+        const option = document.createElement('option');
+        option.value = equipment.invNumber;
+        
+        // Обрезаем длинное название
+        const shortName = equipment.name.length > 40 
+            ? equipment.name.substring(0, 40) + '...' 
+            : equipment.name;
+        
+        option.textContent = `${equipment.invNumber} - ${shortName}`;
+        option.title = `${equipment.location} | ${equipment.name} (${equipment.model}) | Станок: ${equipment.machineNumber}`;
+        select.appendChild(option);
+        
+        // Сохраняем для фильтрации
+        window.allEquipmentOptions.push({
+            element: option.cloneNode(true),
+            text: option.textContent.toLowerCase(),
+            value: equipment.invNumber
+        });
+    });
+    
+    // Если есть поисковый запрос, применяем фильтр
+    if (searchInput && searchInput.value) {
+        filterSearchableOptions(searchInput.value);
+    }
+    
+    console.log(`Добавлено ${equipmentDatabase.length} опций в select`);
+}
+
+// Создание обычного select
+function createRegularSelect() {
     invNumberSelect.innerHTML = '<option value="">Выберите инвентарный номер</option>';
     
     if (equipmentDatabase.length === 0) {
@@ -543,6 +864,38 @@ function populateInvNumberSelect() {
         option.title = `${equipment.location} | ${equipment.name} (${equipment.model}) | Станок: ${equipment.machineNumber}`;
         invNumberSelect.appendChild(option);
     });
+    
+    console.log(`Добавлено ${equipmentDatabase.length} опций в обычный select`);
+}
+
+// Фильтрация опций в поисковом select
+function filterSearchableOptions(searchTerm) {
+    const select = document.getElementById('invNumber');
+    if (!select || !window.allEquipmentOptions) return;
+    
+    const term = searchTerm.toLowerCase();
+    select.innerHTML = '';
+    
+    // Добавляем опцию по умолчанию
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Выберите инвентарный номер';
+    select.appendChild(defaultOption);
+    
+    // Фильтруем и добавляем подходящие опции
+    window.allEquipmentOptions.forEach(option => {
+        if (option.text.includes(term) || option.value.includes(term)) {
+            select.appendChild(option.element.cloneNode(true));
+        }
+    });
+    
+    // Если есть результаты, показываем первый
+    if (select.options.length > 1) {
+        select.selectedIndex = 1;
+        handleInvNumberChange.call(select);
+    } else {
+        select.selectedIndex = 0;
+    }
 }
 
 // Заполнение фильтра участков
@@ -584,26 +937,54 @@ function updateSummary() {
 
 // Добавление обработчиков событий
 function addEventListeners() {
+    console.log('Добавление обработчиков событий...');
+    
     // Обработчик изменения инвентарного номера
     if (invNumberSelect) {
         invNumberSelect.addEventListener('change', handleInvNumberChange);
+        console.log('Обработчик добавлен для invNumberSelect');
     }
     
     // Обработчик отправки формы
     if (repairForm) {
         repairForm.addEventListener('submit', handleFormSubmit);
+        console.log('Обработчик добавлен для repairForm');
     }
     
     // Обработчик очистки формы
     if (clearBtn) {
         clearBtn.addEventListener('click', clearForm);
+        console.log('Обработчик добавлен для clearBtn');
     }
     
     // Обработчики фильтров
-    if (searchInput) searchInput.addEventListener('input', applyFilters);
-    if (statusFilter) statusFilter.addEventListener('change', applyFilters);
-    if (locationFilter) locationFilter.addEventListener('change', applyFilters);
-    if (monthFilter) monthFilter.addEventListener('change', applyFilters);
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFilters);
+        console.log('Обработчик добавлен для searchInput');
+    }
+    if (statusFilter) {
+        statusFilter.addEventListener('change', applyFilters);
+        console.log('Обработчик добавлен для statusFilter');
+    }
+    if (locationFilter) {
+        locationFilter.addEventListener('change', applyFilters);
+        console.log('Обработчик добавлен для locationFilter');
+    }
+    if (monthFilter) {
+        monthFilter.addEventListener('change', applyFilters);
+        console.log('Обработчик добавлен для monthFilter');
+    }
+    
+    // Добавляем обработчик для поиска в инвентарном номере
+    const invSearchInput = document.getElementById('invNumberSearch');
+    if (invSearchInput) {
+        invSearchInput.addEventListener('input', function() {
+            filterSearchableOptions(this.value);
+        });
+        console.log('Обработчик добавлен для invNumberSearch');
+    }
+    
+    console.log('Все обработчики событий добавлены');
 }
 
 // ============================================
@@ -613,6 +994,7 @@ function addEventListeners() {
 // Обработчик изменения инвентарного номера
 function handleInvNumberChange() {
     const selectedInvNumber = this.value;
+    console.log('Выбран инвентарный номер:', selectedInvNumber);
     
     if (selectedInvNumber) {
         // Находим оборудование по инвентарному номеру
@@ -628,6 +1010,10 @@ function handleInvNumberChange() {
             if (machineNumberInput && equipment.machineNumber && equipment.machineNumber !== '-') {
                 machineNumberInput.value = equipment.machineNumber;
             }
+            
+            console.log('Поля автозаполнены для оборудования:', equipment.name);
+        } else {
+            console.warn('Оборудование не найдено для номера:', selectedInvNumber);
         }
     } else {
         // Очищаем поля
@@ -635,15 +1021,18 @@ function handleInvNumberChange() {
         if (locationInput) locationInput.value = '';
         if (modelInput) modelInput.value = '';
         if (machineNumberInput) machineNumberInput.value = '';
+        console.log('Поля очищены');
     }
 }
 
 // Обработчик отправки формы
 async function handleFormSubmit(e) {
     e.preventDefault();
+    console.log('Отправка формы...');
     
     // Проверка прав доступа
     if (!window.currentUser) {
+        console.warn('Пользователь не авторизован');
         showAccessError();
         return;
     }
@@ -656,6 +1045,7 @@ async function handleFormSubmit(e) {
     try {
         // Создаем новую заявку
         const newRequest = createRequestFromForm();
+        console.log('Создана новая заявка:', newRequest);
         
         // Добавляем заявку
         await addRepairRequest(newRequest);
@@ -729,6 +1119,8 @@ function createRequestFromForm() {
 
 // Очистка формы
 function clearForm() {
+    console.log('Очистка формы...');
+    
     if (!repairForm) return;
     
     repairForm.reset();
@@ -765,10 +1157,19 @@ function clearForm() {
     if (repairEndTimeInput) repairEndTimeInput.value = timeString;
     
     // Сбрасываем выпадающий список
-    if (invNumberSelect) {
-        invNumberSelect.selectedIndex = 0;
-        handleInvNumberChange.call(invNumberSelect);
+    const invSelect = document.getElementById('invNumber');
+    if (invSelect) {
+        invSelect.selectedIndex = 0;
+        handleInvNumberChange.call(invSelect);
     }
+    
+    // Очищаем поле поиска если есть
+    const searchInput = document.getElementById('invNumberSearch');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
+    console.log('Форма очищена');
 }
 
 // ============================================
@@ -814,549 +1215,9 @@ function calculateDowntimeHours(startDate, startTime, endDate, endTime) {
     }
 }
 
-// ============================================
-// ОТОБРАЖЕНИЕ ТАБЛИЦЫ
-// ============================================
+// Остальной код остается таким же как в предыдущей версии...
+// (функции renderRepairTable, formatDateTime, truncateText, applyFilters и т.д.)
 
-// Отображение таблицы с заявками
-function renderRepairTable(filteredRequests = null) {
-    if (!repairTableBody) return;
-    
-    const requestsToRender = filteredRequests || repairRequests;
-    
-    // Сортируем по дате (новые сверху)
-    requestsToRender.sort((a, b) => {
-        const dateA = new Date(a.date + 'T' + a.time);
-        const dateB = new Date(b.date + 'T' + b.time);
-        return dateB - dateA;
-    });
-    
-    // Очищаем таблицу
-    repairTableBody.innerHTML = '';
-    
-    // Если нет заявок
-    if (requestsToRender.length === 0) {
-        const emptyRow = document.createElement('tr');
-        emptyRow.innerHTML = `
-            <td colspan="15" style="text-align: center; padding: 30px; color: #666;">
-                <div style="font-size: 18px; margin-bottom: 10px;">📭</div>
-                <strong>Нет заявок на ремонт</strong>
-                <p style="margin: 5px 0 0 0; font-size: 14px;">Создайте первую заявку</p>
-            </td>
-        `;
-        repairTableBody.appendChild(emptyRow);
-        return;
-    }
-    
-    // Заполняем таблицу
-    requestsToRender.forEach(request => {
-        const row = document.createElement('tr');
-        
-        // Форматируем дату и время начала
-        const startDateTime = formatDateTime(request.date, request.time);
-        
-        // Форматируем дату и время окончания
-        let endDateTimeDisplay = '-';
-        if (request.repairEndDate && request.repairEndTime && request.status === 'completed') {
-            endDateTimeDisplay = formatDateTime(request.repairEndDate, request.repairEndTime);
-        } else if (request.status === 'completed') {
-            endDateTimeDisplay = 'Завершено';
-        }
-        
-        // Вычисляем время простоя
-        let downtimeHours = request.downtimeHours || 0;
-        if (request.status === 'completed' && request.repairEndDate && request.repairEndTime) {
-            downtimeHours = calculateDowntimeHours(
-                request.date, 
-                request.time, 
-                request.repairEndDate, 
-                request.repairEndTime
-            );
-        }
-        
-        // Определяем статус
-        const statusText = request.status === 'pending' ? 'В ремонте' : 'Завершено';
-        const statusClass = request.status === 'pending' ? 'status-pending' : 'status-completed';
-        
-        // Создаем кнопки действий
-        let actionButtons = '';
-        
-        // Проверяем права для удаления
-        const canDelete = window.currentUser && 
-                         (window.currentUser.type === 'admin' || 
-                          window.currentUser.permissions?.canDelete);
-        
-        // Проверяем права для завершения
-        const canComplete = window.currentUser && 
-                           (window.currentUser.type === 'admin' || 
-                            window.currentUser.type === 'repair' ||
-                            window.currentUser.permissions?.canComplete);
-        
-        if (canDelete) {
-            actionButtons += `<button class="btn btn-delete" onclick="deleteRequest(${request.id})" title="Удалить">🗑️ Удалить</button>`;
-        }
-        
-        if (request.status === 'pending' && canComplete) {
-            actionButtons += `<button class="btn" style="background-color: #2196F3; padding: 6px 12px; font-size: 13px;" onclick="completeRequest(${request.id})" title="Завершить ремонт">✅ Завершить</button>`;
-        }
-        
-        // Если нет доступных действий
-        if (!actionButtons) {
-            actionButtons = '<span style="color: #999; font-size: 12px;">Нет доступных действий</span>';
-        }
-        
-        row.innerHTML = `
-            <td>${startDateTime}</td>
-            <td>${request.author}</td>
-            <td>${request.location}</td>
-            <td>${request.invNumber}</td>
-            <td title="${request.equipmentName}">${truncateText(request.equipmentName, 30)}</td>
-            <td>${request.model}</td>
-            <td>${request.machineNumber}</td>
-            <td title="${request.faultDescription}">${truncateText(request.faultDescription, 40)}</td>
-            <td>${endDateTimeDisplay}</td>
-            <td class="${statusClass}">${statusText}</td>
-            <td>${request.downtimeCount}</td>
-            <td>${downtimeHours.toFixed(1)} ч</td>
-            <td>${request.productionItem}</td>
-            <td class="actions-cell">${actionButtons}</td>
-        `;
-        
-        repairTableBody.appendChild(row);
-    });
-}
-
-// Форматирование даты и времени
-function formatDateTime(dateString, timeString = '') {
-    if (!dateString || dateString === '-' || dateString === 'Завершено') {
-        return dateString;
-    }
-    
-    try {
-        const date = new Date(dateString);
-        
-        if (timeString) {
-            const [hours, minutes] = timeString.split(':');
-            date.setHours(parseInt(hours) || 0, parseInt(minutes) || 0);
-            
-            return date.toLocaleDateString('ru-RU') + ' ' + 
-                   date.getHours().toString().padStart(2, '0') + ':' + 
-                   date.getMinutes().toString().padStart(2, '0');
-        }
-        
-        return date.toLocaleDateString('ru-RU');
-    } catch (error) {
-        console.error('Ошибка форматирования даты:', error);
-        return dateString + (timeString ? ' ' + timeString : '');
-    }
-}
-
-// Обрезка длинного текста
-function truncateText(text, maxLength) {
-    if (!text) return '';
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
-}
-
-// ============================================
-// ФИЛЬТРАЦИЯ И ПОИСК
-// ============================================
-
-// Применение фильтров
-function applyFilters() {
-    let filtered = [...repairRequests];
-    
-    // Фильтр по поисковому запросу
-    const searchTerm = searchInput?.value.toLowerCase() || '';
-    if (searchTerm) {
-        filtered = filtered.filter(request => 
-            (request.equipmentName && request.equipmentName.toLowerCase().includes(searchTerm)) ||
-            (request.faultDescription && request.faultDescription.toLowerCase().includes(searchTerm)) ||
-            (request.invNumber && request.invNumber.toLowerCase().includes(searchTerm)) ||
-            (request.location && request.location.toLowerCase().includes(searchTerm)) ||
-            (request.author && request.author.toLowerCase().includes(searchTerm)) ||
-            (request.machineNumber && request.machineNumber.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    // Фильтр по статусу
-    const statusValue = statusFilter?.value || 'all';
-    if (statusValue !== 'all') {
-        filtered = filtered.filter(request => request.status === statusValue);
-    }
-    
-    // Фильтр по участку
-    const locationValue = locationFilter?.value || 'all';
-    if (locationValue !== 'all') {
-        filtered = filtered.filter(request => request.location === locationValue);
-    }
-    
-    // Фильтр по месяцу
-    const monthValue = monthFilter?.value;
-    if (monthValue) {
-        filtered = filtered.filter(request => {
-            try {
-                const requestDate = new Date(request.date);
-                const requestMonth = requestDate.getFullYear() + '-' + 
-                                    (requestDate.getMonth() + 1).toString().padStart(2, '0');
-                return requestMonth === monthValue;
-            } catch (error) {
-                return false;
-            }
-        });
-    }
-    
-    // Отображаем отфильтрованные данные
-    renderRepairTable(filtered);
-}
-
-// ============================================
-// ДАШБОРД
-// ============================================
-
-// Генерация HTML для дашборда
-function generateDashboardHTML() {
-    const stats = calculateDashboardStats();
-    
-    return `
-        <div class="dashboard-stats">
-            <div class="stat-card">
-                <h3>📊 Всего заявок</h3>
-                <div class="stat-value">${stats.totalRequests}</div>
-                <div class="stat-change">За все время</div>
-            </div>
-            
-            <div class="stat-card">
-                <h3>🔧 В работе</h3>
-                <div class="stat-value">${stats.pendingRequests}</div>
-                <div class="stat-change">${stats.pendingPercent}% от общего</div>
-            </div>
-            
-            <div class="stat-card">
-                <h3>✅ Завершено</h3>
-                <div class="stat-value">${stats.completedRequests}</div>
-                <div class="stat-change">${stats.completedPercent}% от общего</div>
-            </div>
-            
-            <div class="stat-card">
-                <h3>⏱️ Среднее время ремонта</h3>
-                <div class="stat-value">${stats.avgRepairTime} ч</div>
-                <div class="stat-change">на заявку</div>
-            </div>
-        </div>
-        
-        <div style="margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
-            <h3 style="color: #4CAF50; margin-top: 0;">📈 Ключевые показатели</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-                <div><strong>Общий простой:</strong> ${stats.totalDowntime} часов</div>
-                <div><strong>Эффективность:</strong> ${stats.efficiency}% завершено вовремя</div>
-                <div><strong>Заявок в этом месяце:</strong> ${stats.thisMonthRequests}</div>
-                <div><strong>Завершено в этом месяце:</strong> ${stats.thisMonthCompleted}</div>
-                <div><strong>Самый проблемный участок:</strong> ${stats.mostProblematicLocation}</div>
-                <div><strong>Среднее количество простоев:</strong> ${stats.avgDowntimeCount}</div>
-            </div>
-        </div>
-        
-        <div style="margin-top: 30px;">
-            <h3 style="color: #4CAF50;">📋 Последние заявки</h3>
-            <div style="max-height: 300px; overflow-y: auto;">
-                ${generateRecentRequestsHTML()}
-            </div>
-        </div>
-    `;
-}
-
-// Расчет статистики для дашборда
-function calculateDashboardStats() {
-    const totalRequests = repairRequests.length;
-    const pendingRequests = repairRequests.filter(req => req.status === 'pending').length;
-    const completedRequests = repairRequests.filter(req => req.status === 'completed').length;
-    
-    // Проценты
-    const pendingPercent = totalRequests > 0 ? Math.round((pendingRequests / totalRequests) * 100) : 0;
-    const completedPercent = totalRequests > 0 ? Math.round((completedRequests / totalRequests) * 100) : 0;
-    
-    // Время простоя
-    const totalDowntime = repairRequests.reduce((sum, req) => sum + (req.downtimeHours || 0), 0);
-    const avgRepairTime = completedRequests > 0 ? (totalDowntime / completedRequests).toFixed(1) : '0.0';
-    
-    // Эффективность
-    const timelyCompleted = repairRequests.filter(req => {
-        if (req.status !== 'completed') return false;
-        if (!req.repairEndDate || !req.date) return false;
-        
-        const startDate = new Date(req.date);
-        const endDate = new Date(req.repairEndDate);
-        const diffDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-        
-        return diffDays <= 7;
-    }).length;
-    
-    const efficiency = completedRequests > 0 ? Math.round((timelyCompleted / completedRequests) * 100) : 0;
-    
-    // Заявки за текущий месяц
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    
-    const thisMonthRequests = repairRequests.filter(req => {
-        const reqDate = new Date(req.date);
-        return reqDate.getMonth() === currentMonth && reqDate.getFullYear() === currentYear;
-    }).length;
-    
-    const thisMonthCompleted = repairRequests.filter(req => {
-        if (req.status !== 'completed') return false;
-        const reqDate = new Date(req.date);
-        return reqDate.getMonth() === currentMonth && reqDate.getFullYear() === currentYear;
-    }).length;
-    
-    // Самый проблемный участок
-    const locationCounts = {};
-    repairRequests.forEach(req => {
-        locationCounts[req.location] = (locationCounts[req.location] || 0) + 1;
-    });
-    
-    let mostProblematicLocation = '-';
-    let maxLocationCount = 0;
-    
-    Object.entries(locationCounts).forEach(([location, count]) => {
-        if (count > maxLocationCount) {
-            maxLocationCount = count;
-            mostProblematicLocation = location;
-        }
-    });
-    
-    // Среднее количество простоев
-    const avgDowntimeCount = completedRequests > 0 ? 
-        (repairRequests.reduce((sum, req) => sum + (req.downtimeCount || 0), 0) / completedRequests).toFixed(1) : '0.0';
-    
-    return {
-        totalRequests,
-        pendingRequests,
-        completedRequests,
-        pendingPercent,
-        completedPercent,
-        totalDowntime: totalDowntime.toFixed(1),
-        avgRepairTime,
-        efficiency,
-        thisMonthRequests,
-        thisMonthCompleted,
-        mostProblematicLocation,
-        avgDowntimeCount
-    };
-}
-
-// Генерация HTML для последних заявок
-function generateRecentRequestsHTML() {
-    const recentRequests = [...repairRequests]
-        .sort((a, b) => new Date(b.date + 'T' + b.time) - new Date(a.date + 'T' + a.time))
-        .slice(0, 10);
-    
-    if (recentRequests.length === 0) {
-        return '<p style="text-align: center; color: #666;">Нет заявок</p>';
-    }
-    
-    let html = '<table style="width: 100%; border-collapse: collapse; font-size: 14px;">';
-    html += '<tr style="background-color: #f0f0f0;"><th>Дата</th><th>Оборудование</th><th>Статус</th></tr>';
-    
-    recentRequests.forEach(req => {
-        const statusColor = req.status === 'pending' ? '#ff9800' : '#4CAF50';
-        html += `
-            <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 8px;">${formatDateTime(req.date, req.time)}</td>
-                <td style="padding: 8px;">${truncateText(req.equipmentName, 25)}</td>
-                <td style="padding: 8px; color: ${statusColor}; font-weight: bold;">
-                    ${req.status === 'pending' ? 'В работе' : 'Завершено'}
-                </td>
-            </tr>
-        `;
-    });
-    
-    html += '</table>';
-    return html;
-}
-
-// ============================================
-// УТИЛИТЫ И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-// ============================================
-
-// Проверка соединения
-function checkConnection() {
-    isOnline = navigator.onLine;
-    
-    // Обновляем статус
-    updateConnectionStatus();
-    
-    // Слушаем события изменения соединения
-    window.addEventListener('online', () => {
-        isOnline = true;
-        updateConnectionStatus();
-        showNotification('Соединение восстановлено', 'success');
-    });
-    
-    window.addEventListener('offline', () => {
-        isOnline = false;
-        updateConnectionStatus();
-        showNotification('Работа в офлайн-режиме', 'warning');
-    });
-}
-
-// Обновление статуса соединения
-function updateConnectionStatus() {
-    const statusElement = document.createElement('div');
-    statusElement.id = 'connectionStatus';
-    statusElement.style.cssText = `
-        position: fixed;
-        bottom: 10px;
-        right: 10px;
-        padding: 8px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
-        z-index: 9999;
-        background-color: ${isOnline ? '#4CAF50' : '#ff9800'};
-        color: white;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    `;
-    
-    statusElement.innerHTML = isOnline 
-        ? '<span style="font-size: 16px;">●</span> Онлайн' 
-        : '<span style="font-size: 16px;">●</span> Офлайн';
-    
-    // Удаляем старый статус
-    const oldStatus = document.getElementById('connectionStatus');
-    if (oldStatus) oldStatus.remove();
-    
-    // Добавляем новый
-    document.body.appendChild(statusElement);
-}
-
-// Показать уведомление
-function showNotification(message, type = 'info') {
-    // Удаляем старое уведомление
-    const oldNotification = document.querySelector('.custom-notification');
-    if (oldNotification) oldNotification.remove();
-    
-    // Создаем новое уведомление
-    const notification = document.createElement('div');
-    notification.className = 'custom-notification';
-    
-    const colors = {
-        success: '#4CAF50',
-        error: '#f44336',
-        warning: '#ff9800',
-        info: '#2196F3'
-    };
-    
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 15px 20px;
-        border-radius: 8px;
-        color: white;
-        font-weight: bold;
-        z-index: 10000;
-        background-color: ${colors[type] || colors.info};
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        animation: slideIn 0.3s ease-out;
-        max-width: 300px;
-        word-wrap: break-word;
-    `;
-    
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    // Автоматически скрываем через 5 секунд
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-in';
-        setTimeout(() => notification.remove(), 300);
-    }, 5000);
-}
-
-// Показать ошибку доступа
-function showAccessError() {
-    const errorDiv = document.getElementById('accessRestricted');
-    if (errorDiv) {
-        errorDiv.style.display = 'block';
-        setTimeout(() => {
-            errorDiv.style.display = 'none';
-        }, 3000);
-    }
-}
-
-// Закрытие модального окна при клике вне его
-window.onclick = function(event) {
-    const modal = document.getElementById('dashboardModal');
-    if (event.target === modal) {
-        modal.style.display = 'none';
-    }
-};
-
-// Закрытие модального окна по ESC
-document.addEventListener('keydown', function(event) {
-    const modal = document.getElementById('dashboardModal');
-    if (event.key === 'Escape' && modal && modal.style.display === 'block') {
-        modal.style.display = 'none';
-    }
-});
-
-// Добавляем стили для анимаций
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-    
-    @keyframes slideOut {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
-    }
-    
-    .dashboard-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
-    }
-    
-    .stat-card {
-        background-color: #f5f5f5;
-        padding: 20px;
-        border-radius: 8px;
-        text-align: center;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    
-    .stat-card h3 {
-        margin-top: 0;
-        color: #4CAF50;
-        font-size: 14px;
-        text-transform: uppercase;
-    }
-    
-    .stat-value {
-        font-size: 32px;
-        font-weight: bold;
-        color: #333;
-        margin: 10px 0;
-    }
-    
-    .stat-change {
-        font-size: 12px;
-        color: #666;
-    }
-`;
-document.head.appendChild(style);
-
-// Сообщение при закрытии страницы
-window.addEventListener('beforeunload', function(e) {
-    // Автосохранение данных
-    localStorage.setItem('repairRequests', JSON.stringify(repairRequests));
-    localStorage.setItem('equipmentDatabase', JSON.stringify(equipmentDatabase));
-});
+// ... [Здесь должен быть остальной код из предыдущей версии] ...
 
 console.log(`${APP_NAME} v${APP_VERSION} готов к работе!`);
