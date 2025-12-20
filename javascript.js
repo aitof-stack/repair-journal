@@ -72,6 +72,11 @@ function checkAuthAndInit() {
 function initApp() {
     console.log(`${APP_NAME} v${APP_VERSION}`);
     
+    // Проверяем авторизацию еще раз для уверенности
+    if (!checkAuth()) {
+        return;
+    }
+    
     // Скрываем экран загрузки
     const loadingScreen = document.getElementById('loadingScreen');
     if (loadingScreen) {
@@ -1712,9 +1717,15 @@ function showNotification(message, type = 'info') {
 
 // Перенаправление на страницу входа
 function redirectToLogin() {
-    setTimeout(() => {
+    // Очищаем данные авторизации
+    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    localStorage.removeItem(STORAGE_KEYS.AUTH_STATUS);
+    
+    // Проверяем, не находимся ли уже на странице логина
+    const currentPage = window.location.pathname.split('/').pop();
+    if (currentPage !== 'login.html') {
         window.location.href = 'login.html';
-    }, 1000);
+    }
 }
 
 // Инициализация при полной загрузке окна
