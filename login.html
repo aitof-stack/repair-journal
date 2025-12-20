@@ -67,4 +67,190 @@
             background-color: #e9ecef;
         }
         
-       
+        .user-type-btn.active {
+            background-color: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }
+        
+        .user-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            background-color: #fafafa;
+        }
+        
+        .user-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .user-item:last-child {
+            border-bottom: none;
+        }
+        
+        .user-item:hover {
+            background-color: #e8f5e9;
+        }
+        
+        .user-item.selected {
+            background-color: #c8e6c9;
+            font-weight: bold;
+            color: #2e7d32;
+        }
+        
+        .password-section {
+            margin-bottom: 25px;
+        }
+        
+        .password-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .password-section input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .password-section input:focus {
+            border-color: #4CAF50;
+            outline: none;
+        }
+        
+        .login-button {
+            width: 100%;
+            padding: 14px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 10px;
+        }
+        
+        .login-button:hover {
+            background-color: #45a049;
+        }
+        
+        .error-message {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            border-left: 4px solid #c62828;
+        }
+        
+        .info-note {
+            background-color: #e3f2fd;
+            color: #1565c0;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 25px;
+            font-size: 14px;
+            border-left: 4px solid #2196F3;
+        }
+        
+        .app-info {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .app-version {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        
+        /* Стили для прокрутки */
+        .user-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .user-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        .user-list::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        .user-list::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>Вход в систему</h1>
+        <p>Журнал заявок на ремонт оборудования</p>
+        
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="login-form">
+            <div class="user-type-selector">
+                <button type="button" class="user-type-btn active" data-type="repair">Ремонтная служба</button>
+                <button type="button" class="user-type-btn" data-type="author">Автор заявки</button>
+                <button type="button" class="user-type-btn" data-type="admin">Администратор</button>
+            </div>
+            
+            <div class="user-list" id="userList">
+                <!-- Список пользователей будет заполняться динамически -->
+            </div>
+            
+            <div class="password-section" id="passwordSection" style="display: none;">
+                <label for="password">Пароль:</label>
+                <input type="password" id="password" placeholder="Введите пароль" autocomplete="current-password">
+            </div>
+            
+            <button type="button" class="login-button" id="loginBtn">Войти в систему</button>
+            
+            <div class="info-note">
+                <strong>Информация:</strong><br>
+                • Ремонтная служба: не требует пароля<br>
+                • Автор заявки: пароль в формате "TabXXXX"<br>
+                • Администратор: пароль в формате "TabXXXX"
+            </div>
+        </div>
+        
+        <div class="app-info">
+            <div>Версия приложения: <span class="app-version">2.0.5</span></div>
+            <div>Для синхронизации используйте экспорт/импорт данных</div>
+            <div style="margin-top: 10px; color: #666;">© Система учета ремонтов оборудования</div>
+        </div>
+    </div>
+    
+    <script src="auth.js"></script>
+    <script>
+        // Проверка, не авторизован ли уже пользователь
+        document.addEventListener('DOMContentLoaded', function() {
+            const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
+            const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
+            
+            if (isAuthenticated && currentUser) {
+                // Если уже авторизован, перенаправляем на главную
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>
