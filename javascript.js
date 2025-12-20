@@ -281,12 +281,12 @@ function renderRepairTable(filteredRequests = null) {
         let actionButtons = '';
         
         if (currentUser && currentUser.type === 'admin') {
-            actionButtons += `<button class="btn btn-delete" onclick="deleteRequest(${request.id})" title="Удалить">Удалить</button>`;
+            actionButtons += `<button class="btn btn-delete" onclick="window.deleteRequest(${request.id})" title="Удалить">Удалить</button>`;
         }
         
         if (request.status === 'pending' && currentUser && 
             (currentUser.type === 'admin' || currentUser.type === 'repair')) {
-            actionButtons += `<button class="btn" style="background-color: #2196F3; padding: 6px 12px; font-size: 13px;" onclick="completeRequest(${request.id})" title="Завершить ремонт">Завершить</button>`;
+            actionButtons += `<button class="btn" style="background-color: #2196F3; padding: 6px 12px; font-size: 13px;" onclick="window.completeRequest(${request.id})" title="Завершить ремонт">Завершить</button>`;
         }
         
         if (!actionButtons) {
@@ -802,109 +802,6 @@ function generateDashboardHTML() {
     `;
 }
 
-// ============ ИНИЦИАЛИЗАЦИЯ ============
-
-// Основная функция инициализации
-function initApp() {
-    if (appInitialized) {
-        console.warn('Приложение уже инициализировано');
-        return;
-    }
-    
-    console.log(`${APP_NAME} v${APP_VERSION}`);
-    
-    // Скрываем экран загрузки
-    const loadingScreen = document.getElementById('loadingScreen');
-    if (loadingScreen) {
-        loadingScreen.style.display = 'none';
-    }
-    
-    // Показываем основной контейнер
-    const mainContainer = document.getElementById('mainContainer');
-    if (mainContainer) {
-        mainContainer.style.display = 'block';
-    }
-    
-    // Инициализация DOM элементов
-    initDOMElements();
-    
-    // Настройка интерфейса по роли
-    setupRoleBasedUI();
-    
-    // Показать информацию о пользователе
-    showUserInfo();
-    
-    // Загрузка данных
-    loadAllData();
-    
-    // Настройка интерфейса
-    setupInterface();
-    
-    // Проверка соединения
-    checkConnection();
-    
-    appInitialized = true;
-    console.log('Приложение успешно запущено');
-}
-
-// Настройка интерфейса по роли
-function setupRoleBasedUI() {
-    if (!currentUser) return;
-    
-    // Автозаполнение автора для авторов заявок
-    if (currentUser.type === 'author' && authorInput) {
-        authorInput.value = currentUser.name;
-        authorInput.readOnly = true;
-        authorInput.style.backgroundColor = '#f0f0f0';
-    }
-    
-    // Для ремонтной службы скрываем форму добавления
-    if (currentUser.type === 'repair') {
-        const formSection = document.getElementById('formSection');
-        const searchFilter = document.getElementById('searchFilter');
-        
-        if (formSection) formSection.style.display = 'none';
-        if (searchFilter) searchFilter.style.display = 'none';
-    }
-    
-    window.currentUser = currentUser;
-}
-
-// Показать информацию о пользователе
-function showUserInfo() {
-    const userInfo = document.getElementById('userInfo');
-    const userName = document.getElementById('userName');
-    const userRole = document.getElementById('userRole');
-    
-    if (userInfo && currentUser) {
-        userInfo.style.display = 'flex';
-        if (userName) userName.textContent = currentUser.name;
-        if (userRole) userRole.textContent = `(${getRoleName(currentUser.type)})`;
-    }
-}
-
-// Проверка авторизации
-function checkAuth() {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const savedUser = JSON.parse(localStorage.getItem('currentUser'));
-    
-    if (!isAuthenticated || !savedUser) {
-        window.location.href = 'login.html';
-        return false;
-    }
-    
-    currentUser = savedUser;
-    console.log(`Пользователь: ${currentUser.name} (${currentUser.type})`);
-    
-    // Настройка интерфейса по роли
-    setupRoleBasedUI();
-    
-    // Показать информацию о пользователе
-    showUserInfo();
-    
-    return true;
-}
-
 // Проверка соединения
 function checkConnection() {
     isOnline = navigator.onLine;
@@ -933,9 +830,9 @@ function checkConnection() {
     });
 }
 
-// ============ ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ КНОПОК ============
+// ============ ГЛОБАЛЬНЫЕ ФУНКЦИИ ============
 
-// Выход из системы
+// Определение глобальных функций
 window.logout = function() {
     if (confirm('Вы уверены, что хотите выйти?')) {
         localStorage.removeItem('currentUser');
@@ -946,7 +843,6 @@ window.logout = function() {
     }
 };
 
-// Импорт базы оборудования
 window.importEquipmentDB = function() {
     if (!currentUser) {
         showAccessError();
@@ -1003,7 +899,6 @@ window.importEquipmentDB = function() {
     input.click();
 };
 
-// Экспорт заявок
 window.exportRepairData = function() {
     if (!currentUser) {
         showAccessError();
@@ -1043,7 +938,6 @@ window.exportRepairData = function() {
     showNotification(`Экспортировано ${repairRequests.length} заявок`, 'success');
 };
 
-// Показать дашборд
 window.showDashboard = function() {
     if (!currentUser) {
         showAccessError();
@@ -1062,7 +956,6 @@ window.showDashboard = function() {
     modal.style.display = 'block';
 };
 
-// Закрыть дашборд
 window.closeDashboard = function() {
     const modal = document.getElementById('dashboardModal');
     if (modal) {
@@ -1070,7 +963,6 @@ window.closeDashboard = function() {
     }
 };
 
-// Удалить заявку
 window.deleteRequest = function(id) {
     if (!currentUser) {
         showAccessError();
@@ -1101,7 +993,6 @@ window.deleteRequest = function(id) {
     }
 };
 
-// Завершить ремонт
 window.completeRequest = function(id) {
     if (!currentUser) {
         showAccessError();
@@ -1156,6 +1047,87 @@ window.completeRequest = function(id) {
     
     showNotification(`Ремонт завершен! Время простоя: ${downtimeHours.toFixed(1)} ч`, 'success');
 };
+
+// ============ ИНИЦИАЛИЗАЦИЯ ============
+
+// Настройка интерфейса по роли
+function setupRoleBasedUI() {
+    if (!currentUser) return;
+    
+    // Автозаполнение автора для авторов заявок
+    if (currentUser.type === 'author' && authorInput) {
+        authorInput.value = currentUser.name;
+        authorInput.readOnly = true;
+        authorInput.style.backgroundColor = '#f0f0f0';
+    }
+    
+    // Для ремонтной службы скрываем форму добавления
+    if (currentUser.type === 'repair') {
+        const formSection = document.getElementById('formSection');
+        const searchFilter = document.getElementById('searchFilter');
+        
+        if (formSection) formSection.style.display = 'none';
+        if (searchFilter) searchFilter.style.display = 'none';
+    }
+    
+    window.currentUser = currentUser;
+}
+
+// Показать информацию о пользователе
+function showUserInfo() {
+    const userInfo = document.getElementById('userInfo');
+    const userName = document.getElementById('userName');
+    const userRole = document.getElementById('userRole');
+    
+    if (userInfo && currentUser) {
+        userInfo.style.display = 'flex';
+        if (userName) userName.textContent = currentUser.name;
+        if (userRole) userRole.textContent = `(${getRoleName(currentUser.type)})`;
+    }
+}
+
+// Основная функция инициализации
+function initApp() {
+    if (appInitialized) {
+        console.warn('Приложение уже инициализировано');
+        return;
+    }
+    
+    console.log(`${APP_NAME} v${APP_VERSION}`);
+    
+    // Скрываем экран загрузки
+    const loadingScreen = document.getElementById('loadingScreen');
+    if (loadingScreen) {
+        loadingScreen.style.display = 'none';
+    }
+    
+    // Показываем основной контейнер
+    const mainContainer = document.getElementById('mainContainer');
+    if (mainContainer) {
+        mainContainer.style.display = 'block';
+    }
+    
+    // Инициализация DOM элементов
+    initDOMElements();
+    
+    // Настройка интерфейса по роли
+    setupRoleBasedUI();
+    
+    // Показать информацию о пользователе
+    showUserInfo();
+    
+    // Загрузка данных
+    loadAllData();
+    
+    // Настройка интерфейса
+    setupInterface();
+    
+    // Проверка соединения
+    checkConnection();
+    
+    appInitialized = true;
+    console.log('Приложение успешно запущено');
+}
 
 // ============ ЗАПУСК ПРИЛОЖЕНИЯ ============
 
