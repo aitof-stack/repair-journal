@@ -1,7 +1,7 @@
 // ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ
 
 // Константы
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.0.1'; // Обновленная версия
 const APP_NAME = 'Ремонтный журнал';
 const EQUIPMENT_DB_URL = 'data/equipment_database.csv';
 
@@ -22,20 +22,59 @@ let pendingRequestsElement, completedRequestsElement, totalDowntimeElement;
 // Запуск при загрузке DOM
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Приложение запускается...');
-    initApp();
+    
+    // Проверяем авторизацию
+    checkAuthAndInit();
 });
+
+// Проверка авторизации и инициализация
+function checkAuthAndInit() {
+    const isAuthenticated = localStorage.getItem('isAuthenticated');
+    const savedUser = JSON.parse(localStorage.getItem('currentUser'));
+    
+    if (!isAuthenticated || !savedUser) {
+        // Если нет авторизации, скрываем контент
+        document.getElementById('mainContainer').style.display = 'none';
+        document.getElementById('loadingScreen').style.display = 'none';
+        
+        // Показываем сообщение или перенаправляем
+        setTimeout(() => {
+            window.location.href = 'login.html';
+        }, 1000);
+        return;
+    }
+    
+    currentUser = savedUser;
+    console.log(`Пользователь: ${currentUser.name} (${currentUser.type})`);
+    
+    // Инициализация приложения
+    initApp();
+}
 
 // Основная функция инициализации
 function initApp() {
     console.log(`${APP_NAME} v${APP_VERSION}`);
     
+    // Скрываем экран загрузки
+    const loadingScreen = document.getElementById('loadingScreen');
+    if (loadingScreen) {
+        loadingScreen.style.display = 'none';
+    }
+    
+    // Показываем основной контейнер
+    const mainContainer = document.getElementById('mainContainer');
+    if (mainContainer) {
+        mainContainer.style.display = 'block';
+    }
+    
     // Инициализация DOM элементов
     initDOMElements();
     
-    // Проверка авторизации
-    if (!checkAuth()) {
-        return;
-    }
+    // Настройка интерфейса по роли
+    setupRoleBasedUI();
+    
+    // Показать информацию о пользователе
+    showUserInfo();
     
     // Загрузка данных
     loadAllData();
@@ -46,7 +85,39 @@ function initApp() {
     // Проверка соединения
     checkConnection();
     
+    // Настройка поиска в выпадающем списке
+    setupSearchableSelect();
+    
     console.log('Приложение успешно запущено');
+}
+
+// Настройка поиска в выпадающем списке
+function setupSearchableSelect() {
+    const invNumberSearch = document.getElementById('invNumberSearch');
+    const invNumberSelect = document.getElementById('invNumber');
+    
+    if (invNumberSearch && invNumberSelect) {
+        invNumberSearch.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const options = invNumberSelect.options;
+            
+            for (let i = 0; i < options.length; i++) {
+                const option = options[i];
+                const text = option.textContent.toLowerCase();
+                option.style.display = text.includes(searchTerm) ? '' : 'none';
+            }
+        });
+        
+        invNumberSearch.addEventListener('focus', function() {
+            invNumberSelect.size = 5; // Показываем несколько вариантов
+        });
+        
+        invNumberSearch.addEventListener('blur', function() {
+            setTimeout(() => {
+                invNumberSelect.size = 1;
+            }, 200);
+        });
+    }
 }
 
 // Инициализация DOM элементов
@@ -69,6 +140,9 @@ function initDOMElements() {
     completedRequestsElement = document.getElementById('completedRequests');
     totalDowntimeElement = document.getElementById('totalDowntime');
 }
+
+// ОСТАВЬТЕ ВСЕ ОСТАЛЬНЫЕ ФУНКЦИИ ИЗ ВАШЕГО javascript.js НЕИЗМЕННЫМИ
+// ... весь остальной код javascript.js ...
 
 // Проверка авторизации
 function checkAuth() {
