@@ -426,6 +426,100 @@ tbody tr:hover {
     100% { transform: rotate(360deg); }
 }
 
+/* Стили для кнопок синхронизации */
+.sync-buttons {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #e3f2fd;
+    border-radius: 8px;
+    border: 1px solid #bbdefb;
+}
+
+.sync-title {
+    font-weight: bold;
+    color: #1976d2;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sync-description {
+    font-size: 12px;
+    color: #546e7a;
+    margin-bottom: 10px;
+}
+
+.sync-button-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.sync-button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 8px 15px;
+    font-size: 13px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.sync-button.import {
+    background-color: #2196F3;
+}
+
+.sync-button:hover {
+    opacity: 0.9;
+}
+
+.sync-info {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #78909c;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Классы для колонок таблицы */
+.col-datetime {
+    min-width: 150px;
+}
+
+.col-location {
+    min-width: 80px;
+}
+
+.col-inv {
+    min-width: 100px;
+}
+
+.col-machine {
+    min-width: 120px;
+}
+
+.col-status {
+    min-width: 100px;
+}
+
+.col-count {
+    min-width: 80px;
+    text-align: center;
+}
+
+.col-hours {
+    min-width: 100px;
+    text-align: center;
+}
+
+.col-actions {
+    min-width: 150px;
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
     .container {
@@ -459,6 +553,40 @@ tbody tr:hover {
         padding: 20px;
         width: 95%;
     }
+    
+    .user-info {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .sync-button-group {
+        flex-direction: column;
+    }
+    
+    .sync-button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .summary {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-section {
+        padding: 15px;
+    }
+    
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 8px 10px;
+    }
 }
 
 /* Анимация появления строк */
@@ -475,4 +603,24 @@ tbody tr:hover {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Стиль для селекта с поиском */
+.form-group {
+    position: relative;
+}
+
+.form-group select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px;
+    padding-right: 35px;
+}
+
+/* Стили для поля поиска в селекте */
+#invNumberSearch {
+    margin-bottom: 8px;
+    width: 100%;
 }
