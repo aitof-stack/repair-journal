@@ -109,10 +109,13 @@ function setupRoleBasedUI() {
     
     // Для ремонтной службы скрываем лишние элементы
     if (currentUser.type === 'repair') {
-        ['formSection', 'searchFilter', 'summarySection'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = 'none';
-        });
+        const formSection = document.getElementById('formSection');
+        const searchFilter = document.getElementById('searchFilter');
+        const summarySection = document.getElementById('summarySection');
+        
+        if (formSection) formSection.style.display = 'none';
+        if (searchFilter) searchFilter.style.display = 'none';
+        if (summarySection) summarySection.style.display = 'none';
         
         const pageTitle = document.getElementById('pageTitle');
         if (pageTitle) {
@@ -161,7 +164,7 @@ window.logout = function() {
 
 // Импорт базы оборудования
 window.importEquipmentDB = function() {
-    if (!window.currentUser) {
+    if (!currentUser) {
         showAccessError();
         return;
     }
@@ -265,9 +268,14 @@ window.closeDashboard = function() {
 };
 
 // Удалить заявку
-window.deleteRequest = async function(id) {
-    if (!window.currentUser) {
+window.deleteRequest = function(id) {
+    if (!currentUser) {
         showAccessError();
+        return;
+    }
+    
+    if (!currentUser.permissions.canDelete) {
+        showNotification('У вас нет прав для удаления заявок', 'error');
         return;
     }
     
@@ -291,9 +299,14 @@ window.deleteRequest = async function(id) {
 };
 
 // Завершить ремонт
-window.completeRequest = async function(id) {
-    if (!window.currentUser) {
+window.completeRequest = function(id) {
+    if (!currentUser) {
         showAccessError();
+        return;
+    }
+    
+    if (!currentUser.permissions.canComplete) {
+        showNotification('У вас нет прав для завершения ремонтов', 'error');
         return;
     }
     
@@ -468,18 +481,6 @@ function setupInterface() {
 function populateInvNumberSelect() {
     if (!invNumberSelect) return;
     
-    // Проверяем, есть ли уже поисковое поле
-    const searchContainer = document.querySelector('.searchable-select-container');
-    
-    if (searchContainer) {
-        updateSearchableSelect();
-    } else {
-        createRegularSelect();
-    }
-}
-
-// Создание обычного select
-function createRegularSelect() {
     invNumberSelect.innerHTML = '<option value="">Выберите инвентарный номер</option>';
     
     if (equipmentDatabase.length === 0) {
@@ -570,63 +571,14 @@ function addEventListeners() {
 
 // Добавить поиск в select
 function addSearchToSelect() {
-    if (!invNumberSelect) return;
+    const invNumberSearch = document.getElementById('invNumberSearch');
+    const invNumberSelectElement = document.getElementById('invNumber');
     
-    // Если уже есть поисковый интерфейс, выходим
-    if (document.querySelector('.searchable-select-container')) {
-        return;
-    }
+    if (!invNumberSearch || !invNumberSelectElement) return;
     
-    const originalSelect = invNumberSelect;
-    const container = document.createElement('div');
-    container.className = 'searchable-select-container';
-    
-    // Поле поиска
-    const searchInput = document.createElement('input');
-    searchInput.type = 'text';
-    searchInput.id = 'invNumberSearch';
-    searchInput.placeholder = 'Поиск по номеру или названию...';
-    searchInput.style.cssText = `
-        width: 100%;
-        padding: 10px;
-        margin-bottom: 5px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 14px;
-        box-sizing: border-box;
-    `;
-    
-    // Новый select
-    const newSelect = document.createElement('select');
-    newSelect.id = 'invNumber';
-    newSelect.name = 'invNumber';
-    newSelect.required = true;
-    newSelect.style.cssText = `
-        width: 100%;
-        padding: 10px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 14px;
-        box-sizing: border-box;
-        max-height: 200px;
-        overflow-y: auto;
-    `;
-    
-    // Опция по умолчанию
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = 'Выберите инвентарный номер';
-    newSelect.appendChild(defaultOption);
-    
-    // Копируем опции
     window.allEquipmentOptions = [];
     
-    equipmentDatabase.sort((a, b) => {
-        const numA = parseInt(a.invNumber) || 0;
-        const numB = parseInt(b.invNumber) || 0;
-        return numA - numB;
-    });
-    
+    // Сохраняем все опции
     equipmentDatabase.forEach(equipment => {
         const option = document.createElement('option');
         option.value = equipment.invNumber;
@@ -637,32 +589,31 @@ function addSearchToSelect() {
         
         option.textContent = `${equipment.invNumber} - ${shortName}`;
         option.title = `${equipment.location} | ${equipment.name} (${equipment.model}) | Станок: ${equipment.machineNumber}`;
-        newSelect.appendChild(option);
         
         window.allEquipmentOptions.push({
-            element: option.cloneNode(true),
+            element: option,
             text: option.textContent.toLowerCase(),
-            value: equipment.invNumber
+            value: equipment.invNumber,
+            equipment: equipment
         });
     });
     
     // Функция фильтрации
     function filterOptions(searchTerm) {
         const term = searchTerm.toLowerCase();
-        newSelect.innerHTML = '';
-        newSelect.appendChild(defaultOption.cloneNode(true));
+        invNumberSelectElement.innerHTML = '<option value="">Выберите инвентарный номер</option>';
         
         window.allEquipmentOptions.forEach(option => {
             if (option.text.includes(term) || option.value.includes(term)) {
-                newSelect.appendChild(option.element.cloneNode(true));
+                invNumberSelectElement.appendChild(option.element.cloneNode(true));
             }
         });
         
-        if (newSelect.options.length > 1) {
-            newSelect.selectedIndex = 1;
-            handleInvNumberChange.call(newSelect);
+        if (invNumberSelectElement.options.length > 1) {
+            invNumberSelectElement.selectedIndex = 1;
+            handleInvNumberChange.call(invNumberSelectElement);
         } else {
-            newSelect.selectedIndex = 0;
+            invNumberSelectElement.selectedIndex = 0;
             if (equipmentNameInput) equipmentNameInput.value = '';
             if (locationInput) locationInput.value = '';
             if (modelInput) modelInput.value = '';
@@ -670,92 +621,13 @@ function addSearchToSelect() {
         }
     }
     
-    // Обработчики событий
-    searchInput.addEventListener('input', function() {
+    // Обработчик поиска
+    invNumberSearch.addEventListener('input', function() {
         filterOptions(this.value);
     });
     
-    newSelect.addEventListener('change', handleInvNumberChange);
-    
-    // Заменяем оригинальный select
-    originalSelect.parentNode.replaceChild(container, originalSelect);
-    container.appendChild(searchInput);
-    container.appendChild(newSelect);
-    
-    invNumberSelect = newSelect;
-}
-
-// Обновить поисковый select
-function updateSearchableSelect() {
-    const searchInput = document.getElementById('invNumberSearch');
-    const select = document.getElementById('invNumber');
-    
-    if (!select) return;
-    
-    select.innerHTML = '';
-    
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = 'Выберите инвентарный номер';
-    select.appendChild(defaultOption);
-    
-    window.allEquipmentOptions = [];
-    
-    equipmentDatabase.sort((a, b) => {
-        const numA = parseInt(a.invNumber) || 0;
-        const numB = parseInt(b.invNumber) || 0;
-        return numA - numB;
-    });
-    
-    equipmentDatabase.forEach(equipment => {
-        const option = document.createElement('option');
-        option.value = equipment.invNumber;
-        
-        const shortName = equipment.name.length > 40 
-            ? equipment.name.substring(0, 40) + '...' 
-            : equipment.name;
-        
-        option.textContent = `${equipment.invNumber} - ${shortName}`;
-        option.title = `${equipment.location} | ${equipment.name} (${equipment.model}) | Станок: ${equipment.machineNumber}`;
-        select.appendChild(option);
-        
-        window.allEquipmentOptions.push({
-            element: option.cloneNode(true),
-            text: option.textContent.toLowerCase(),
-            value: equipment.invNumber
-        });
-    });
-    
-    if (searchInput && searchInput.value) {
-        filterSearchOptions(searchInput.value);
-    }
-}
-
-// Фильтрация поиска
-function filterSearchOptions(searchTerm) {
-    const select = document.getElementById('invNumber');
-    if (!select || !window.allEquipmentOptions) return;
-    
-    const term = searchTerm.toLowerCase();
-    select.innerHTML = '';
-    
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = 'Выберите инвентарный номер';
-    select.appendChild(defaultOption);
-    
-    window.allEquipmentOptions.forEach(option => {
-        if (option.text.includes(term) || option.value.includes(term)) {
-            select.appendChild(option.element.cloneNode(true));
-        }
-    });
-    
-    if (select.options.length > 1) {
-        select.selectedIndex = 1;
-        handleInvNumberChange.call(select);
-    } else {
-        select.selectedIndex = 0;
-    }
+    // Инициализация
+    filterOptions('');
 }
 
 // ============================================
@@ -787,11 +659,16 @@ function handleInvNumberChange() {
 }
 
 // Отправка формы
-async function handleFormSubmit(e) {
+function handleFormSubmit(e) {
     e.preventDefault();
     
-    if (!window.currentUser) {
+    if (!currentUser) {
         showAccessError();
+        return;
+    }
+    
+    if (!currentUser.permissions.canAdd) {
+        showNotification('У вас нет прав для добавления заявок', 'error');
         return;
     }
     
@@ -801,7 +678,7 @@ async function handleFormSubmit(e) {
     
     try {
         const newRequest = createRequestFromForm();
-        await addRepairRequest(newRequest);
+        addRepairRequest(newRequest);
         
         renderRepairTable();
         updateSummary();
@@ -836,7 +713,7 @@ function validateForm() {
 
 // Создание заявки из формы
 function createRequestFromForm() {
-    let authorName = window.currentUser.name;
+    let authorName = currentUser.name;
     if (authorInput && !authorInput.readOnly && authorInput.value.trim()) {
         authorName = authorInput.value.trim();
     }
@@ -863,6 +740,13 @@ function createRequestFromForm() {
     };
 }
 
+// Добавить заявку
+function addRepairRequest(request) {
+    repairRequests.push(request);
+    localStorage.setItem('repairRequests', JSON.stringify(repairRequests));
+    return request;
+}
+
 // Очистка формы
 function clearForm() {
     if (!repairForm) return;
@@ -874,9 +758,9 @@ function clearForm() {
     if (modelInput) modelInput.value = '';
     if (machineNumberInput) machineNumberInput.value = '';
     
-    if (authorInput && window.currentUser) {
-        if (window.currentUser.type === 'author') {
-            authorInput.value = window.currentUser.name;
+    if (authorInput && currentUser) {
+        if (currentUser.type === 'author') {
+            authorInput.value = currentUser.name;
         } else {
             authorInput.value = '';
         }
@@ -907,17 +791,15 @@ function clearForm() {
     if (searchInput) {
         searchInput.value = '';
     }
-}
-
-// ============================================
-// РАБОТА С ЗАЯВКАМИ
-// ============================================
-
-// Добавить заявку
-async function addRepairRequest(request) {
-    repairRequests.push(request);
-    localStorage.setItem('repairRequests', JSON.stringify(repairRequests));
-    return request;
+    
+    // Обновить поисковый список
+    if (window.allEquipmentOptions) {
+        const invNumberSelectElement = document.getElementById('invNumber');
+        invNumberSelectElement.innerHTML = '<option value="">Выберите инвентарный номер</option>';
+        window.allEquipmentOptions.forEach(option => {
+            invNumberSelectElement.appendChild(option.element.cloneNode(true));
+        });
+    }
 }
 
 // Вычисление времени простоя
@@ -1005,12 +887,8 @@ function renderRepairTable(filteredRequests = null) {
         
         let actionButtons = '';
         
-        const canDelete = window.currentUser && 
-                         (window.currentUser.type === 'admin');
-        
-        const canComplete = window.currentUser && 
-                           (window.currentUser.type === 'admin' || 
-                            window.currentUser.type === 'repair');
+        const canDelete = currentUser && currentUser.permissions.canDelete;
+        const canComplete = currentUser && currentUser.permissions.canComplete;
         
         if (canDelete) {
             actionButtons += `<button class="btn btn-delete" onclick="deleteRequest(${request.id})" title="Удалить">Удалить</button>`;
@@ -1288,10 +1166,10 @@ function checkConnection() {
     const connectionStatus = document.getElementById('connectionStatus');
     if (connectionStatus) {
         if (isOnline) {
-            connectionStatus.innerHTML = '🟢 Онлайн';
+            connectionStatus.innerHTML = 'Онлайн';
             connectionStatus.style.color = '#4CAF50';
         } else {
-            connectionStatus.innerHTML = '🔴 Оффлайн';
+            connectionStatus.innerHTML = 'Оффлайн';
             connectionStatus.style.color = '#f44336';
         }
     }
@@ -1397,64 +1275,6 @@ function addDashboardStyles() {
         .stat-change {
             font-size: 12px;
             color: #4CAF50;
-        }
-        
-        .status-pending {
-            background-color: #fff3cd;
-            color: #856404;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        
-        .status-completed {
-            background-color: #d4edda;
-            color: #155724;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            background-color: #2196F3;
-            color: white;
-            border-radius: 4px;
-            z-index: 1000;
-            display: none;
-            transition: opacity 0.3s;
-        }
-        
-        .searchable-select-container {
-            position: relative;
-            margin-bottom: 10px;
-        }
-        
-        .actions-cell {
-            display: flex;
-            gap: 5px;
-            flex-wrap: wrap;
-        }
-        
-        .btn {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: background-color 0.2s;
-        }
-        
-        .btn-delete {
-            background-color: #f44336;
-            color: white;
-        }
-        
-        .btn-delete:hover {
-            background-color: #d32f2f;
         }
     `;
     
