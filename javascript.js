@@ -1740,3 +1740,61 @@ window.addEventListener('error', function(e) {
 });
 
 console.log(`${APP_NAME} v${APP_VERSION} готово к работе!`);
+// ============ ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ ============
+
+// Функции, которые должны быть доступны глобально
+window.updateEquipmentDB = updateEquipmentDB;
+window.exportRepairData = exportRepairData;
+window.exportForSync = exportForSync;
+window.importForSync = importForSync;
+window.showDashboard = showDashboard;
+window.closeDashboard = closeDashboard;
+window.deleteRequest = deleteRequest;
+window.completeRequest = completeRequest;
+window.logout = logout;
+
+// Функции для работы с DOM
+window.addEventListener('DOMContentLoaded', function() {
+    // Инициализация происходит в основном скрипте
+});
+
+// Убедитесь, что эти функции объявлены
+function updateEquipmentDB() {
+    // Эта функция уже есть в коде
+}
+
+function exportRepairData() {
+    // Эта функция уже есть в коде
+}
+
+function exportForSync() {
+    // Эта функция уже есть в коде
+}
+
+function importForSync() {
+    // Эта функция уже есть в коде
+}
+
+function showDashboard() {
+    // Эта функция уже есть в коде
+}
+
+function closeDashboard() {
+    // Эта функция уже есть в коде
+}
+
+function deleteRequest(id) {
+    // Эта функция уже есть в коде
+}
+
+function completeRequest(id) {
+    // Эта функция уже есть в коде
+}
+
+function logout() {
+    if (confirm('Вы уверены, что хотите выйти?')) {
+        localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+        localStorage.removeItem(STORAGE_KEYS.AUTH_STATUS);
+        redirectToLogin();
+    }
+}
