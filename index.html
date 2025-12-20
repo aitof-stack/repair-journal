@@ -7,9 +7,6 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Проверка авторизации -->
-    <div id="authCheck" style="display: none;"></div>
-    
     <!-- Уведомление -->
     <div class="notification" id="notification"></div>
     
@@ -102,6 +99,14 @@
                     <button type="button" class="btn dashboard-btn" onclick="showDashboard()">Дашборд</button>
                 </div>
             </form>
+            
+            <!-- Информация о базе оборудования -->
+            <div class="db-info" id="dbInfo">
+                <div class="db-info-content">
+                    <span id="dbInfoText">База оборудования не загружена</span>
+                    <button class="btn-refresh" onclick="updateEquipmentDB()" title="Обновить базу">🔄</button>
+                </div>
+            </div>
         </div>
         
         <!-- Поиск и фильтры -->
