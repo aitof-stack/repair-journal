@@ -2,101 +2,50 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#4CAF50">
-    <meta name="msapplication-TileColor" content="#4CAF50">
-    
-    <meta name="description" content="Журнал заявок на ремонт оборудования">
-    <meta name="keywords" content="ремонт, оборудование, заявки, журнал, учет">
-    <meta name="author" content="Ремонтная служба">
-    
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Журнал заявок на ремонт оборудования</title>
-    
-    <link rel="icon" type="image/x-icon" href="favicon.ico">
-    <link rel="manifest" href="manifest.json">
-    
     <link rel="stylesheet" href="style.css">
-    
     <style>
         * {
-            -webkit-tap-highlight-color: transparent;
-            -webkit-touch-callout: none;
-        }
-        
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
+            box-sizing: border-box;
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
             background-color: #f5f5f5;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
         }
         
-        input, select, textarea, button {
-            font-size: 16px !important;
-        }
-        
-        /* Контейнер приложения */
         .container {
             max-width: 1400px;
             margin: 0 auto;
             background-color: white;
-            padding: 15px;
+            padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            min-height: calc(100vh - 30px);
         }
         
-        /* Заголовки */
-        h1 {
+        h1, h2, h3 {
             color: #333;
+        }
+        
+        h1 {
             text-align: center;
-            margin-bottom: 25px;
+            margin-bottom: 30px;
             padding-bottom: 15px;
             border-bottom: 2px solid #4CAF50;
-            font-size: 1.8rem;
-            word-wrap: break-word;
         }
         
-        h2 {
-            color: #444;
-            margin-top: 25px;
-            font-size: 1.4rem;
-        }
-        
-        /* Блок информации о пользователе */
         .user-info {
             background-color: #4CAF50;
             color: white;
             padding: 10px 15px;
             border-radius: 6px;
-            font-size: 14px;
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .user-info-content {
-            display: flex;
             align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
+            margin-bottom: 20px;
         }
         
         .logout-btn {
@@ -106,113 +55,14 @@
             padding: 8px 15px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 13px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-            white-space: nowrap;
         }
         
-        .logout-btn:hover {
-            background-color: #d32f2f;
-        }
-        
-        /* Сообщения об ошибках */
-        .access-restricted {
-            background-color: #ffebee;
-            border: 1px solid #ffcdd2;
-            color: #c62828;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            text-align: center;
-            font-size: 14px;
-            display: none;
-        }
-        
-        /* Кнопки */
-        .btn {
-            padding: 12px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 15px;
-            font-weight: bold;
-            transition: all 0.3s;
-            text-decoration: none;
-            display: inline-block;
-            text-align: center;
-            touch-action: manipulation;
-        }
-        
-        .btn:hover {
-            background-color: #45a049;
-            transform: translateY(-1px);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        
-        .btn:active {
-            transform: translateY(0);
-        }
-        
-        .btn-delete {
-            background-color: #f44336;
-            padding: 8px 15px;
-            font-size: 14px;
-        }
-        
-        .btn-delete:hover {
-            background-color: #d32f2f;
-        }
-        
-        .btn-clear {
-            background-color: #ff9800;
-        }
-        
-        .btn-clear:hover {
-            background-color: #e68900;
-        }
-        
-        .btn-admin {
-            background-color: #2196F3;
-        }
-        
-        .btn-admin:hover {
-            background-color: #0b7dda;
-        }
-        
-        .btn-load {
-            background-color: #34a853;
-        }
-        
-        .btn-load:hover {
-            background-color: #2e8b47;
-        }
-        
-        .dashboard-btn {
-            background-color: #9C27B0;
-        }
-        
-        .dashboard-btn:hover {
-            background-color: #7B1FA2;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 12px;
-            margin-top: 20px;
-            flex-wrap: wrap;
-        }
-        
-        /* Секция формы */
         .form-section {
             background-color: #f9f9f9;
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 25px;
-            border: 1px solid #e0e0e0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #ddd;
         }
         
         .form-row {
@@ -229,578 +79,157 @@
         
         label {
             display: block;
-            margin-bottom: 6px;
-            font-weight: 600;
-            color: #555;
-            font-size: 14px;
+            margin-bottom: 5px;
+            font-weight: bold;
         }
         
-        input[type="text"],
-        input[type="date"],
-        input[type="time"],
-        input[type="month"],
-        input[type="password"],
-        select,
-        textarea {
+        input, select, textarea {
             width: 100%;
-            padding: 12px;
+            padding: 8px;
             border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 15px;
-            background-color: white;
-            transition: border-color 0.3s;
-        }
-        
-        input:focus,
-        select:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #4CAF50;
-            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+            border-radius: 4px;
         }
         
         textarea {
             resize: vertical;
             min-height: 100px;
-            font-family: inherit;
         }
         
-        /* Поиск и фильтры */
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .btn-clear {
+            background-color: #ff9800;
+        }
+        
+        .btn-load {
+            background-color: #2196F3;
+        }
+        
+        .btn-admin {
+            background-color: #9C27B0;
+        }
+        
+        .dashboard-btn {
+            background-color: #607D8B;
+        }
+        
         .search-filter {
             margin-bottom: 20px;
             display: flex;
-            gap: 12px;
+            gap: 10px;
             flex-wrap: wrap;
         }
         
         .search-filter input,
         .search-filter select {
-            padding: 10px;
             flex: 1;
-            min-width: 180px;
+            min-width: 150px;
+            padding: 8px;
         }
         
-        /* Подсказка для скролла */
-        .scroll-hint {
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 10px;
+        .summary {
+            background-color: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
             display: flex;
-            align-items: center;
-            gap: 5px;
-            padding: 10px;
-            background-color: #f0f0f0;
-            border-radius: 6px;
-            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
         }
         
-        .scroll-icon {
-            font-size: 16px;
-            display: inline-block;
-            animation: bounce 2s infinite;
+        .summary-item {
+            flex: 1;
+            min-width: 150px;
         }
         
-        @keyframes bounce {
-            0%, 100% { transform: translateX(0); }
-            50% { transform: translateX(5px); }
-        }
-        
-        /* Контейнер таблицы */
         .table-container {
             width: 100%;
             overflow-x: auto;
-            margin-top: 15px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            -webkit-overflow-scrolling: touch;
+            margin-top: 20px;
         }
         
         table {
-            min-width: 1200px;
             width: 100%;
             border-collapse: collapse;
-            font-size: 14px;
+            min-width: 1200px;
         }
         
         th, td {
-            padding: 10px 8px;
+            padding: 10px;
+            border: 1px solid #ddd;
             text-align: left;
-            border: 1px solid #e0e0e0;
-            vertical-align: top;
         }
         
         th {
             background-color: #4CAF50;
             color: white;
-            position: sticky;
-            top: 0;
-            font-weight: bold;
-            white-space: nowrap;
         }
         
-        /* Уменьшенная ширина для столбцов */
-        .col-datetime {
-            width: 150px;
-            min-width: 150px;
-            max-width: 150px;
-        }
-        
-        .col-location {
-            width: 90px;
-            min-width: 90px;
-            max-width: 90px;
-        }
-        
-        .col-inv {
-            width: 100px;
-            min-width: 100px;
-            max-width: 100px;
-        }
-        
-        .col-machine {
-            width: 110px;
-            min-width: 110px;
-            max-width: 110px;
-        }
-        
-        .col-status {
-            width: 110px;
-            min-width: 110px;
-            max-width: 110px;
-        }
-        
-        .col-count {
-            width: 70px;
-            min-width: 70px;
-            max-width: 70px;
-            text-align: center;
-        }
-        
-        .col-hours {
-            width: 100px;
-            min-width: 100px;
-            max-width: 100px;
-            text-align: center;
-        }
-        
-        .col-actions {
-            width: 140px;
-            min-width: 140px;
-            max-width: 140px;
-        }
-        
-        /* Широкие столбцы */
-        td:nth-child(5),
-        td:nth-child(6),
-        td:nth-child(8),
-        td:nth-child(13) {
-            min-width: 160px;
-            max-width: 250px;
-            word-break: break-word;
-        }
-        
-        /* Столбец с автором */
-        td:nth-child(2) {
-            min-width: 130px;
-            max-width: 200px;
-        }
-        
-        /* Чередование строк */
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
         
-        tr:hover {
-            background-color: #f1f8e9;
-        }
-        
-        /* Статусы */
-        .status-pending {
-            color: #ff9800;
-            font-weight: bold;
-        }
-        
-        .status-completed {
-            color: #4CAF50;
-            font-weight: bold;
-        }
-        
-        /* Ячейки действий */
-        .actions-cell {
-            display: flex;
-            gap: 5px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        
-        /* Сводная информация */
-        .summary {
-            background-color: #e8f5e9;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 15px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        
-        .summary-item {
-            margin: 3px 0;
-            font-size: 14px;
-            flex: 1;
-            min-width: 180px;
-        }
-        
-        .summary-item strong {
-            display: block;
-            color: #2e7d32;
-            margin-bottom: 3px;
-            font-size: 13px;
-        }
-        
-        /* Модальное окно дашборда */
         .modal {
             display: none;
             position: fixed;
-            z-index: 1000;
-            left: 0;
             top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             background-color: rgba(0,0,0,0.5);
-            overflow: auto;
-            backdrop-filter: blur(2px);
+            z-index: 1000;
         }
         
         .modal-content {
             background-color: white;
-            margin: 5% auto;
-            padding: 25px;
-            border-radius: 10px;
+            margin: 50px auto;
+            padding: 20px;
             width: 90%;
             max-width: 1000px;
-            max-height: 85vh;
+            max-height: 80vh;
             overflow-y: auto;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-            animation: modalFadeIn 0.3s;
-        }
-        
-        @keyframes modalFadeIn {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
+            border-radius: 8px;
         }
         
         .close {
-            color: #aaa;
             float: right;
             font-size: 28px;
-            font-weight: bold;
             cursor: pointer;
-            line-height: 20px;
-            transition: color 0.3s;
         }
         
-        .close:hover,
-        .close:focus {
-            color: #000;
-            text-decoration: none;
-        }
-        
-        /* Поиск в выпадающем списке */
-        .searchable-select-container {
-            position: relative;
-            width: 100%;
-        }
-        
-        .searchable-select-container input {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 8px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 15px;
-            box-sizing: border-box;
-            background-color: white;
-            transition: border-color 0.3s;
-        }
-        
-        .searchable-select-container input:focus {
-            outline: none;
-            border-color: #4CAF50;
-            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
-        }
-        
-        .searchable-select-container select {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 15px;
-            box-sizing: border-box;
-            background-color: white;
-            max-height: 250px;
-            overflow-y: auto;
-            transition: border-color 0.3s;
-        }
-        
-        .searchable-select-container select:focus {
-            outline: none;
-            border-color: #4CAF50;
-            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
-        }
-        
-        /* Уведомления */
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            background-color: #2196F3;
-            color: white;
-            border-radius: 4px;
-            z-index: 1000;
-            display: none;
-            transition: opacity 0.3s;
-        }
-        
-        /* Статус соединения */
-        .connection-status {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            padding: 5px 10px;
-            background-color: #4CAF50;
-            color: white;
-            border-radius: 4px;
-            font-size: 12px;
-            z-index: 1000;
-        }
-        
-        /* Медиа-запросы для мобильных устройств */
         @media (max-width: 768px) {
-            body {
-                margin: 5px;
-                padding: 5px;
-                font-size: 15px;
-            }
-            
             .container {
-                padding: 12px;
-                margin: 0;
-                border-radius: 0;
-                box-shadow: none;
-                min-height: calc(100vh - 10px);
-            }
-            
-            h1 {
-                font-size: 1.5rem;
-                margin-bottom: 20px;
-                padding-bottom: 10px;
-            }
-            
-            h2 {
-                font-size: 1.3rem;
-                margin-top: 20px;
-            }
-            
-            .user-info {
-                position: static;
-                margin: 0 0 15px 0;
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .user-info-content {
-                justify-content: space-between;
-                margin-bottom: 10px;
-            }
-            
-            .logout-btn {
-                width: 100%;
                 padding: 10px;
-            }
-            
-            .form-section {
-                padding: 15px;
             }
             
             .form-row {
                 flex-direction: column;
-                gap: 12px;
-            }
-            
-            .form-group {
-                width: 100%;
-                min-width: 100%;
             }
             
             .button-group {
                 flex-direction: column;
-                gap: 10px;
             }
             
             .btn {
                 width: 100%;
-                margin: 0;
-                padding: 14px;
             }
             
             .search-filter {
                 flex-direction: column;
-                gap: 10px;
-            }
-            
-            .search-filter input,
-            .search-filter select {
-                width: 100%;
-                min-width: 100%;
-            }
-            
-            .summary {
-                flex-direction: column;
-                gap: 12px;
-                padding: 12px;
-            }
-            
-            .summary-item {
-                width: 100%;
-                min-width: 100%;
-            }
-            
-            .table-container {
-                margin: 10px -12px;
-                width: calc(100% + 24px);
-                border-radius: 0;
-                border-left: none;
-                border-right: none;
-            }
-            
-            table {
-                min-width: 1000px;
-                font-size: 13px;
-            }
-            
-            th, td {
-                padding: 8px 6px;
-            }
-            
-            .col-datetime {
-                width: 130px;
-                min-width: 130px;
-                max-width: 130px;
-            }
-            
-            .modal-content {
-                width: 95%;
-                margin: 10% auto;
-                padding: 20px;
-            }
-            
-            .searchable-select-container input,
-            .searchable-select-container select {
-                font-size: 16px !important;
-                padding: 14px;
-            }
-        }
-        
-        /* Маленькие экраны */
-        @media (max-width: 480px) {
-            .container {
-                padding: 10px;
-            }
-            
-            h1 {
-                font-size: 1.3rem;
-            }
-            
-            h2 {
-                font-size: 1.2rem;
-            }
-            
-            .form-section {
-                padding: 12px;
-            }
-            
-            input[type="text"],
-            input[type="date"],
-            input[type="time"],
-            input[type="month"],
-            select,
-            textarea {
-                padding: 10px;
-            }
-            
-            .scroll-hint {
-                font-size: 12px;
-                padding: 8px;
-            }
-            
-            .summary-item {
-                font-size: 13px;
-            }
-            
-            .summary-item strong {
-                font-size: 12px;
-            }
-            
-            table {
-                min-width: 900px;
-                font-size: 12px;
-            }
-            
-            th, td {
-                padding: 6px 4px;
-            }
-        }
-        
-        /* Темная тема */
-        @media (prefers-color-scheme: dark) {
-            body {
-                background-color: #121212;
-                color: #e0e0e0;
-            }
-            
-            .container {
-                background-color: #1e1e1e;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            }
-            
-            .form-section {
-                background-color: #2d2d2d;
-                border-color: #404040;
-            }
-            
-            input, select, textarea {
-                background-color: #2d2d2d;
-                border-color: #404040;
-                color: #e0e0e0;
-            }
-            
-            .table-container {
-                border-color: #404040;
-            }
-            
-            th, td {
-                border-color: #404040;
-            }
-            
-            tr:nth-child(even) {
-                background-color: #2d2d2d;
-            }
-            
-            tr:hover {
-                background-color: #3d3d3d;
-            }
-            
-            .searchable-select-container input,
-            .searchable-select-container select {
-                background-color: #2d2d2d;
-                border-color: #404040;
-                color: #e0e0e0;
             }
         }
     </style>
@@ -815,7 +244,7 @@
     <div class="container">
         <!-- Информация о пользователе -->
         <div class="user-info" id="userInfo" style="display: none;">
-            <div class="user-info-content">
+            <div>
                 <span id="userName"></span>
                 <span id="userRole"></span>
             </div>
@@ -824,12 +253,6 @@
         
         <!-- Заголовок -->
         <h1 id="pageTitle">Журнал заявок на ремонт оборудования</h1>
-        
-        <!-- Сообщение о недостаточных правах -->
-        <div class="access-restricted" id="accessRestricted" style="display: none;">
-            <strong>Доступ запрещен</strong>
-            <p>У вас недостаточно прав для выполнения этого действия.</p>
-        </div>
         
         <!-- Форма для добавления новой заявки -->
         <div class="form-section" id="formSection">
@@ -845,34 +268,33 @@
                         <label for="time">Время:</label>
                         <input type="time" id="time" required>
                     </div>
-
+                    
                     <div class="form-group">
                         <label for="author">Автор заявки:</label>
-                        <input type="text" id="author" required placeholder="ФИО или табельный номер">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="invNumber">Инвентарный номер:</label>
-                        <div class="searchable-select-container">
-                            <input type="text" id="invNumberSearch" placeholder="Поиск по номеру или названию...">
-                            <select id="invNumber" required>
-                                <option value="">Выберите инвентарный номер</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="equipmentName">Наименование оборудования:</label>
-                        <input type="text" id="equipmentName" readonly>
+                        <input type="text" id="author" required>
                     </div>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="location">Участок/Цех:</label>
-                        <input type="text" id="location" readonly>
+                        <label for="invNumber">Инвентарный номер:</label>
+                        <select id="invNumber" required>
+                            <option value="">Выберите инвентарный номер</option>
+                        </select>
                     </div>
                     
+                    <div class="form-group">
+                        <label for="equipmentName">Оборудование:</label>
+                        <input type="text" id="equipmentName" readonly>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="location">Участок:</label>
+                        <input type="text" id="location" readonly>
+                    </div>
+                </div>
+                
+                <div class="form-row">
                     <div class="form-group">
                         <label for="model">Модель:</label>
                         <input type="text" id="model" readonly>
@@ -884,35 +306,23 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="productionItem">Номенклатура выпускаемой продукции:</label>
+                        <label for="productionItem">Продукция:</label>
                         <input type="text" id="productionItem">
                     </div>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group" style="flex: 2;">
-                        <label for="faultDescription">Описание неисправности:</label>
-                        <textarea id="faultDescription" required placeholder="Подробно опишите неисправность..."></textarea>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="repairEndDate">Дата окончания ремонта:</label>
-                        <input type="date" id="repairEndDate">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="repairEndTime">Время окончания ремонта:</label>
-                        <input type="time" id="repairEndTime">
+                        <label for="faultDescription">Неисправность:</label>
+                        <textarea id="faultDescription" required></textarea>
                     </div>
                 </div>
                 
                 <div class="button-group">
                     <button type="submit" class="btn">Добавить заявку</button>
-                    <button type="button" class="btn btn-clear" id="clearBtn">Очистить форму</button>
-                    <button type="button" class="btn btn-load" onclick="importEquipmentDB()">Загрузить базу оборудования</button>
-                    <button type="button" class="btn btn-admin" onclick="exportRepairData()">Экспорт заявок</button>
+                    <button type="button" class="btn btn-clear" id="clearBtn">Очистить</button>
+                    <button type="button" class="btn btn-load" onclick="importEquipmentDB()">Загрузить базу</button>
+                    <button type="button" class="btn btn-admin" onclick="exportRepairData()">Экспорт</button>
                     <button type="button" class="btn dashboard-btn" onclick="showDashboard()">Дашборд</button>
                 </div>
             </form>
@@ -920,7 +330,7 @@
         
         <!-- Поиск и фильтры -->
         <div class="search-filter" id="searchFilter">
-            <input type="text" id="searchInput" placeholder="Поиск по оборудованию или неисправности...">
+            <input type="text" id="searchInput" placeholder="Поиск...">
             <select id="statusFilter">
                 <option value="all">Все статусы</option>
                 <option value="pending">В ремонте</option>
@@ -929,16 +339,10 @@
             <select id="locationFilter">
                 <option value="all">Все участки</option>
             </select>
-            <input type="month" id="monthFilter" placeholder="Фильтр по месяцу">
+            <input type="month" id="monthFilter">
         </div>
         
-        <!-- Заголовок таблицы и кнопка дашборда -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; margin-bottom: 10px;">
-            <h2>Заявки на ремонт</h2>
-            <button type="button" class="btn dashboard-btn" onclick="showDashboard()" style="margin: 0;">Дашборд</button>
-        </div>
-        
-        <!-- Сводная информация перед таблицей -->
+        <!-- Сводная информация -->
         <div class="summary" id="summarySection">
             <div class="summary-item">
                 <strong>Всего заявок:</strong> <span id="totalRequests">0</span>
@@ -950,35 +354,30 @@
                 <strong>Завершено:</strong> <span id="completedRequests">0</span>
             </div>
             <div class="summary-item">
-                <strong>Общее время простоя:</strong> <span id="totalDowntime">0 ч</span>
+                <strong>Время простоя:</strong> <span id="totalDowntime">0 ч</span>
             </div>
         </div>
         
-        <!-- Подсказка для скролла -->
-        <div class="scroll-hint">
-            <i>Используйте горизонтальную прокрутку для просмотра всех колонок таблицы</i>
-            <span class="scroll-icon">↔</span>
-        </div>
-        
         <!-- Таблица с заявками -->
+        <h2>Заявки на ремонт</h2>
         <div class="table-container">
             <table id="repairTable">
                 <thead>
                     <tr>
-                        <th class="col-datetime">Дата и время начала</th>
-                        <th>Автор заявки</th>
-                        <th class="col-location">Участок</th>
-                        <th class="col-inv">Инв. номер</th>
-                        <th>Наименование оборудования</th>
+                        <th>Дата и время</th>
+                        <th>Автор</th>
+                        <th>Участок</th>
+                        <th>Инв. номер</th>
+                        <th>Оборудование</th>
                         <th>Модель</th>
-                        <th class="col-machine">Номер станка</th>
-                        <th>Описание неисправности</th>
-                        <th class="col-datetime">Дата и время окончания ремонта</th>
-                        <th class="col-status">Статус</th>
-                        <th class="col-count">Кол-во простоев</th>
-                        <th class="col-hours">Время простоя (часы)</th>
-                        <th>Номенклатура продукции</th>
-                        <th class="col-actions">Действия</th>
+                        <th>Номер станка</th>
+                        <th>Неисправность</th>
+                        <th>Дата окончания</th>
+                        <th>Статус</th>
+                        <th>Кол-во простоев</th>
+                        <th>Время простоя</th>
+                        <th>Продукция</th>
+                        <th>Действия</th>
                     </tr>
                 </thead>
                 <tbody id="repairTableBody">
