@@ -10,4 +10,4 @@
 - Адаптивный дизайн для мобильных устройств
 
 ## Доступ:
-https://[ваш-username].github.io/repair-journal/
+https://aitof-stack.github.io/repair-journal/
