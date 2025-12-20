@@ -6,7 +6,7 @@
     <title>Журнал заявок на ремонт оборудования</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* Восстановленные стили из index (1).html */
+        /* Все стили из предыдущей версии остаются без изменений */
         * {
             -webkit-tap-highlight-color: transparent;
             -webkit-touch-callout: none;
@@ -419,6 +419,23 @@
         .table-container {
             animation: fadeIn 0.5s ease-out;
         }
+        
+        /* Стиль для поля поиска в выпадающем списке */
+        #invNumberSearch {
+            margin-bottom: 5px;
+        }
+        
+        /* Индикатор загрузки базы */
+        .db-loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
@@ -472,7 +489,7 @@
                     
                     <div class="form-group">
                         <label for="invNumber">Инвентарный номер:</label>
-                        <input type="text" id="invNumberSearch" placeholder="Поиск...">
+                        <input type="text" id="invNumberSearch" placeholder="Поиск по номеру или названию...">
                         <select id="invNumber" required>
                             <option value="">Выберите инвентарный номер</option>
                         </select>
@@ -512,7 +529,7 @@
                 <div class="button-group">
                     <button type="submit" class="btn">Добавить заявку</button>
                     <button type="button" class="btn btn-clear" id="clearBtn">Очистить форму</button>
-                    <button type="button" class="btn btn-load" onclick="window.importEquipmentDB()">Загрузить базу оборудования</button>
+                    <button type="button" class="btn btn-load" onclick="window.updateEquipmentDB()">🔄 Обновить базу</button>
                     <button type="button" class="btn btn-admin" onclick="window.exportRepairData()">Экспорт заявок</button>
                     <button type="button" class="btn dashboard-btn" onclick="window.showDashboard()">Дашборд</button>
                 </div>
@@ -605,11 +622,15 @@
         <div style="text-align: center;">
             <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #4CAF50; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
             <p>Загрузка приложения...</p>
+            <p style="font-size: 12px; color: #666; margin-top: 10px;" id="loadingStatus">Загрузка базы оборудования с GitHub...</p>
         </div>
     </div>
 
     <script src="javascript.js"></script>
     <script>
+        // Обновляем статус загрузки
+        const loadingStatus = document.getElementById('loadingStatus');
+        
         // Проверка авторизации при загрузке
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
