@@ -141,9 +141,6 @@ function initDOMElements() {
     totalDowntimeElement = document.getElementById('totalDowntime');
 }
 
-// ОСТАВЬТЕ ВСЕ ОСТАЛЬНЫЕ ФУНКЦИИ ИЗ ВАШЕГО javascript.js НЕИЗМЕННЫМИ
-// ... весь остальной код javascript.js ...
-
 // Проверка авторизации
 function checkAuth() {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
