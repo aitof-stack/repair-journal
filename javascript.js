@@ -1165,48 +1165,6 @@ function generateDashboardHTML() {
                 <div><strong>Общий простой:</strong> ${stats.totalDowntime} часов</div>
                 <div><strong>Эффективность:</strong> ${stats.efficiency}% завершено вовремя</div>
                 <div><strong>Заявок в этом месяце:</strong> ${stats.thisMonthRequests}</div>
-                <div><strong>Завершено в этом месяце:</strong> ${stats.thisMonth
-// ============================================
-// ДАШБОРД (ПРОДОЛЖЕНИЕ)
-// ============================================
-
-// Генерация HTML дашборда
-function generateDashboardHTML() {
-    const stats = calculateDashboardStats();
-    
-    return `
-        <div class="dashboard-stats">
-            <div class="stat-card">
-                <h3>Всего заявок</h3>
-                <div class="stat-value">${stats.totalRequests}</div>
-                <div class="stat-change">За все время</div>
-            </div>
-            
-            <div class="stat-card">
-                <h3>В работе</h3>
-                <div class="stat-value">${stats.pendingRequests}</div>
-                <div class="stat-change">${stats.pendingPercent}% от общего</div>
-            </div>
-            
-            <div class="stat-card">
-                <h3>Завершено</h3>
-                <div class="stat-value">${stats.completedRequests}</div>
-                <div class="stat-change">${stats.completedPercent}% от общего</div>
-            </div>
-            
-            <div class="stat-card">
-                <h3>Среднее время ремонта</h3>
-                <div class="stat-value">${stats.avgRepairTime} ч</div>
-                <div class="stat-change">на заявку</div>
-            </div>
-        </div>
-        
-        <div style="margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
-            <h3 style="color: #4CAF50; margin-top: 0;">Ключевые показатели</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-                <div><strong>Общий простой:</strong> ${stats.totalDowntime} часов</div>
-                <div><strong>Эффективность:</strong> ${stats.efficiency}% завершено вовремя</div>
-                <div><strong>Заявок в этом месяце:</strong> ${stats.thisMonthRequests}</div>
                 <div><strong>Завершено в этом месяце:</strong> ${stats.thisMonthCompleted}</div>
             </div>
         </div>
@@ -1505,4 +1463,4 @@ function addDashboardStyles() {
     document.head.appendChild(styleElement);
 }
 
-console.log('Приложение полностью загружено и готово к работе!');                                                                 
+console.log('Приложение полностью загружено и готово к работе!');
