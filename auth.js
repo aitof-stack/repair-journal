@@ -20,14 +20,6 @@ const users = {
 let selectedUserType = 'repair';
 let selectedUser = null;
 
-// DOM элементы
-const userTypeButtons = document.querySelectorAll('.user-type-btn');
-const userList = document.getElementById('userList');
-const passwordSection = document.getElementById('passwordSection');
-const passwordInput = document.getElementById('password');
-const loginBtn = document.getElementById('loginBtn');
-const errorMessage = document.getElementById('errorMessage');
-
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     // Загружаем список пользователей для ремонтной службы по умолчанию
@@ -39,44 +31,37 @@ document.addEventListener('DOMContentLoaded', function() {
         highlightSelectedUser(selectedUser.name);
     }
     
-    // Добавляем обработчики для кнопок типа пользователя
-    userTypeButtons.forEach(button => {
+    // Обработчики для кнопок типа пользователя
+    document.querySelectorAll('.user-type-btn').forEach(button => {
         button.addEventListener('click', function() {
-            // Убираем активный класс у всех кнопок
-            userTypeButtons.forEach(btn => btn.classList.remove('active'));
-            
-            // Добавляем активный класс текущей кнопке
+            document.querySelectorAll('.user-type-btn').forEach(btn => btn.classList.remove('active'));
             this.classList.add('active');
             
-            // Обновляем выбранный тип пользователя
             selectedUserType = this.dataset.type;
             selectedUser = null;
             
-            // Обновляем список пользователей
             populateUserList(selectedUserType);
             
-            // Показываем/скрываем поле пароля
             if (selectedUserType === 'repair') {
-                passwordSection.style.display = 'none';
+                document.getElementById('passwordSection').style.display = 'none';
                 if (users.repair.length > 0) {
                     selectedUser = users.repair[0];
                     highlightSelectedUser(selectedUser.name);
                 }
             } else {
-                passwordSection.style.display = 'block';
+                document.getElementById('passwordSection').style.display = 'block';
             }
             
-            // Сбрасываем поле пароля и сообщение об ошибке
-            passwordInput.value = '';
-            errorMessage.style.display = 'none';
+            document.getElementById('password').value = '';
+            document.getElementById('errorMessage').style.display = 'none';
         });
     });
     
     // Обработчик кнопки входа
-    loginBtn.addEventListener('click', login);
+    document.getElementById('loginBtn').addEventListener('click', login);
     
     // Обработчик нажатия Enter в поле пароля
-    passwordInput.addEventListener('keypress', function(e) {
+    document.getElementById('password').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             login();
         }
@@ -85,6 +70,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Заполнение списка пользователей
 function populateUserList(userType) {
+    const userList = document.getElementById('userList');
     userList.innerHTML = '';
     
     if (!users[userType] || users[userType].length === 0) {
@@ -104,8 +90,8 @@ function populateUserList(userType) {
         userItem.addEventListener('click', function() {
             selectedUser = user;
             highlightSelectedUser(user.name);
-            passwordInput.value = '';
-            errorMessage.style.display = 'none';
+            document.getElementById('password').value = '';
+            document.getElementById('errorMessage').style.display = 'none';
         });
         
         userList.appendChild(userItem);
@@ -114,8 +100,7 @@ function populateUserList(userType) {
 
 // Выделение выбранного пользователя
 function highlightSelectedUser(userName) {
-    const userItems = document.querySelectorAll('.user-item');
-    userItems.forEach(item => {
+    document.querySelectorAll('.user-item').forEach(item => {
         if (item.dataset.name === userName) {
             item.classList.add('selected');
         } else {
@@ -133,7 +118,7 @@ function login() {
     
     // Проверка пароля (кроме ремонтной службы)
     if (selectedUserType !== 'repair') {
-        const enteredPassword = passwordInput.value.trim();
+        const enteredPassword = document.getElementById('password').value.trim();
         
         if (!enteredPassword) {
             showError('Введите пароль');
@@ -146,7 +131,7 @@ function login() {
         }
     }
     
-    // Сохраняем данные пользователя в localStorage
+    // Сохраняем данные пользователя
     const userData = {
         type: selectedUserType,
         name: selectedUser.name,
@@ -162,54 +147,30 @@ function login() {
 
 // Функция показа ошибки
 function showError(message) {
+    const errorMessage = document.getElementById('errorMessage');
     errorMessage.textContent = message;
     errorMessage.style.display = 'block';
     
-    // Скрываем ошибку через 3 секунды
     setTimeout(() => {
         errorMessage.style.display = 'none';
     }, 3000);
 }
 
-// Получение прав доступа для типа пользователя
+// Получение прав доступа
 function getPermissions(userType) {
     switch(userType) {
         case 'admin':
-            return {
-                canAdd: true,
-                canDelete: true,
-                canComplete: true,
-                canViewAll: true,
-                canEdit: true
-            };
+            return { canAdd: true, canDelete: true, canComplete: true, canExport: true };
         case 'author':
-            return {
-                canAdd: true,
-                canDelete: false,
-                canComplete: false,
-                canViewAll: true,
-                canEdit: false
-            };
+            return { canAdd: true, canDelete: false, canComplete: false, canExport: false };
         case 'repair':
-            return {
-                canAdd: false,
-                canDelete: false,
-                canComplete: true,
-                canViewAll: true,
-                canEdit: false
-            };
+            return { canAdd: false, canDelete: false, canComplete: true, canExport: false };
         default:
-            return {
-                canAdd: false,
-                canDelete: false,
-                canComplete: false,
-                canViewAll: false,
-                canEdit: false
-            };
+            return { canAdd: false, canDelete: false, canComplete: false, canExport: false };
     }
 }
 
-// Функция проверки аутентификации (для использования на других страницах)
+// Функция проверки аутентификации
 function checkAuthentication() {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
