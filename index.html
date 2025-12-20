@@ -170,24 +170,8 @@
     <script>
         // Проверка авторизации при загрузке
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(function() {
-                const isAuthenticated = localStorage.getItem('isAuthenticated');
-                const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-                
-                if (!isAuthenticated || !currentUser) {
-                    // Если не авторизован, перенаправляем на страницу входа
-                    window.location.href = 'login.html';
-                } else {
-                    // Если авторизован, показываем контент
-                    document.getElementById('loadingScreen').style.display = 'none';
-                    document.getElementById('mainContainer').style.display = 'block';
-                    
-                    // Инициализируем приложение
-                    if (typeof initApp === 'function') {
-                        initApp();
-                    }
-                }
-            }, 500);
+            // Эта функция будет вызываться из javascript.js
+            // Убираем дублирующую логику
         });
     </script>
 </body>

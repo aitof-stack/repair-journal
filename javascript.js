@@ -1,15 +1,16 @@
 // ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ
 
 // Константы
-const APP_VERSION = '2.0.1'; // Обновленная версия
+const APP_VERSION = '2.0.2'; // Исправленная версия
 const APP_NAME = 'Ремонтный журнал';
-const EQUIPMENT_DB_URL = 'data/equipment_database.csv';
+const EQUIPMENT_DB_URL = 'https://aitof-stack.github.io/repair-journal/data/equipment_database.csv';
 
 // Переменные приложения
 let equipmentDatabase = [];
 let repairRequests = [];
 let currentUser = null;
 let isOnline = true;
+let appInitialized = false;
 
 // DOM элементы
 let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
@@ -24,23 +25,12 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Приложение запускается...');
     
     // Проверяем авторизацию
-    checkAuthAndInit();
-});
-
-// Проверка авторизации и инициализация
-function checkAuthAndInit() {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     const savedUser = JSON.parse(localStorage.getItem('currentUser'));
     
     if (!isAuthenticated || !savedUser) {
-        // Если нет авторизации, скрываем контент
-        document.getElementById('mainContainer').style.display = 'none';
-        document.getElementById('loadingScreen').style.display = 'none';
-        
-        // Показываем сообщение или перенаправляем
-        setTimeout(() => {
-            window.location.href = 'login.html';
-        }, 1000);
+        // Если нет авторизации, перенаправляем на страницу входа
+        window.location.href = 'login.html';
         return;
     }
     
@@ -49,10 +39,15 @@ function checkAuthAndInit() {
     
     // Инициализация приложения
     initApp();
-}
+});
 
 // Основная функция инициализации
 function initApp() {
+    if (appInitialized) {
+        console.warn('Приложение уже инициализировано');
+        return;
+    }
+    
     console.log(`${APP_NAME} v${APP_VERSION}`);
     
     // Скрываем экран загрузки
@@ -85,39 +80,8 @@ function initApp() {
     // Проверка соединения
     checkConnection();
     
-    // Настройка поиска в выпадающем списке
-    setupSearchableSelect();
-    
+    appInitialized = true;
     console.log('Приложение успешно запущено');
-}
-
-// Настройка поиска в выпадающем списке
-function setupSearchableSelect() {
-    const invNumberSearch = document.getElementById('invNumberSearch');
-    const invNumberSelect = document.getElementById('invNumber');
-    
-    if (invNumberSearch && invNumberSelect) {
-        invNumberSearch.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase();
-            const options = invNumberSelect.options;
-            
-            for (let i = 0; i < options.length; i++) {
-                const option = options[i];
-                const text = option.textContent.toLowerCase();
-                option.style.display = text.includes(searchTerm) ? '' : 'none';
-            }
-        });
-        
-        invNumberSearch.addEventListener('focus', function() {
-            invNumberSelect.size = 5; // Показываем несколько вариантов
-        });
-        
-        invNumberSearch.addEventListener('blur', function() {
-            setTimeout(() => {
-                invNumberSelect.size = 1;
-            }, 200);
-        });
-    }
 }
 
 // Инициализация DOM элементов
@@ -216,6 +180,8 @@ window.logout = function() {
     if (confirm('Вы уверены, что хотите выйти?')) {
         localStorage.removeItem('currentUser');
         localStorage.removeItem('isAuthenticated');
+        localStorage.removeItem('equipmentDatabase');
+        localStorage.removeItem('repairRequests');
         window.location.href = 'login.html';
     }
 };
@@ -1151,10 +1117,10 @@ function checkConnection() {
     if (connectionStatus) {
         if (isOnline) {
             connectionStatus.innerHTML = 'Онлайн';
-            connectionStatus.style.color = '#4CAF50';
+            connectionStatus.style.backgroundColor = '#4CAF50';
         } else {
             connectionStatus.innerHTML = 'Оффлайн';
-            connectionStatus.style.color = '#f44336';
+            connectionStatus.style.backgroundColor = '#f44336';
         }
     }
     
@@ -1212,53 +1178,9 @@ function showAccessError() {
     }, 2000);
 }
 
-// Добавление стилей для дашборда
-function addDashboardStyles() {
-    const styles = `
-        .dashboard-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
-            background-color: #f9f9f9;
-            padding: 20px;
-            border-radius: 8px;
-            border-left: 4px solid #2196F3;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .stat-card h3 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            color: #666;
-            font-weight: normal;
-        }
-        
-        .stat-value {
-            font-size: 28px;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 5px;
-        }
-        
-        .stat-change {
-            font-size: 12px;
-            color: #4CAF50;
-        }
-    `;
-    
-    const styleElement = document.createElement('style');
-    styleElement.textContent = styles;
-    document.head.appendChild(styleElement);
-}
-
 // Инициализация при полной загрузке окна
 window.addEventListener('load', function() {
     console.log('Окно полностью загружено');
-    addDashboardStyles();
 });
 
 console.log('Приложение готово к работе!');

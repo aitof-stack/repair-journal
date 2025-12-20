@@ -22,6 +22,16 @@ let selectedUser = null;
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
+    // Проверяем, не авторизован ли пользователь
+    const isAuthenticated = localStorage.getItem('isAuthenticated');
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    
+    if (isAuthenticated && currentUser) {
+        // Если уже авторизован, перенаправляем на главную
+        window.location.href = 'index.html';
+        return;
+    }
+    
     // Загружаем список пользователей для ремонтной службы по умолчанию
     populateUserList('repair');
     
@@ -180,11 +190,4 @@ function checkAuthentication() {
     }
     
     return currentUser;
-}
-
-// Функция выхода
-function logout() {
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('isAuthenticated');
-    window.location.href = 'login.html';
 }
