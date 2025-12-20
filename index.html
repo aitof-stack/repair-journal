@@ -86,7 +86,7 @@
                 <span id="userName"></span>
                 <span id="userRole"></span>
             </div>
-            <button class="logout-btn" onclick="window.logout()">Выйти</button>
+            <button class="logout-btn" onclick="logout()">Выйти</button>
         </div>
         
         <!-- Заголовок -->
@@ -160,9 +160,9 @@
                 <div class="button-group">
                     <button type="submit" class="btn">Добавить заявку</button>
                     <button type="button" class="btn btn-clear" id="clearBtn">Очистить форму</button>
-                    <button type="button" class="btn btn-load" onclick="window.updateEquipmentDB()">🔄 Обновить базу</button>
-                    <button type="button" class="btn btn-admin" onclick="window.exportRepairData()">Экспорт заявок</button>
-                    <button type="button" class="btn dashboard-btn" onclick="window.showDashboard()">Дашборд</button>
+                    <button type="button" class="btn btn-load" onclick="updateEquipmentDB()">🔄 Обновить базу</button>
+                    <button type="button" class="btn btn-admin" onclick="exportRepairData()">Экспорт заявок</button>
+                    <button type="button" class="btn dashboard-btn" onclick="showDashboard()">Дашборд</button>
                 </div>
             </form>
         </div>
@@ -184,7 +184,7 @@
         <!-- Заголовок таблицы -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; margin-bottom: 10px;">
             <h2>Заявки на ремонт</h2>
-            <button type="button" class="btn dashboard-btn" onclick="window.showDashboard()" style="margin: 0;">Дашборд</button>
+            <button type="button" class="btn dashboard-btn" onclick="showDashboard()" style="margin: 0;">Дашборд</button>
         </div>
         
         <!-- Сводная информация перед таблицей -->
@@ -239,7 +239,7 @@
         <!-- Модальное окно для дашборда -->
         <div id="dashboardModal" class="modal">
             <div class="modal-content">
-                <span class="close" onclick="window.closeDashboard()">&times;</span>
+                <span class="close" onclick="closeDashboard()">&times;</span>
                 <h2>Дашборд статистики</h2>
                 <div id="dashboardContent">
                     <!-- Содержимое дашборда будет генерироваться динамически -->
@@ -267,15 +267,16 @@
                 if (!isAuthenticated || !currentUser) {
                     // Если не авторизован, перенаправляем на страницу входа
                     window.location.href = 'login.html';
-                } else {
-                    // Если авторизован, показываем контент
-                    document.getElementById('loadingScreen').style.display = 'none';
-                    document.getElementById('mainContainer').style.display = 'block';
-                    
-                    // Инициализируем приложение
-                    if (typeof initApp === 'function') {
-                        initApp();
-                    }
+                    return;
+                }
+                
+                // Если авторизован, показываем контент
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('mainContainer').style.display = 'block';
+                
+                // Инициализируем приложение
+                if (typeof initApp === 'function') {
+                    initApp();
                 }
             }, 500);
         });
