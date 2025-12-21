@@ -327,16 +327,23 @@ window.updateEquipmentDB = async function() {
     }
     
     isDBLoading = true;
-    showNotification('Обновление базы оборудования...', 'info');
+    
+    // Добавляем индикатор загрузки на кнопку
+    const updateBtn = document.querySelector('.btn-load');
+    const originalText = updateBtn.textContent;
+    updateBtn.textContent = '🔄 Загрузка...';
+    updateBtn.disabled = true;
     
     try {
         await loadEquipmentDatabase(true); // Принудительное обновление
         showNotification(`База обновлена! Загружено ${equipmentDatabase.length} записей`, 'success');
     } catch (error) {
         console.error('Ошибка обновления базы:', error);
-        showNotification('Ошибка обновления базы', 'error');
+        showNotification('Ошибка обновления базы: ' + error.message, 'error');
     } finally {
         isDBLoading = false;
+        updateBtn.textContent = originalText;
+        updateBtn.disabled = false;
     }
 };
 
@@ -398,31 +405,6 @@ window.showDashboard = function() {
             window.closeDashboard();
         }
     };
-    
-    // Добавляем кнопку обновления базы в дашборд
-    const dashboardStats = dashboardContent.querySelector('.dashboard-stats');
-    if (dashboardStats && currentUser.type === 'admin') {
-        const updateButton = document.createElement('button');
-        updateButton.textContent = '🔄 Обновить базу оборудования';
-        updateButton.style.cssText = `
-            background-color: #2196F3;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-top: 10px;
-            font-size: 14px;
-            display: block;
-            width: 100%;
-        `;
-        updateButton.onclick = window.updateEquipmentDB;
-        
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.marginTop = '20px';
-        buttonContainer.appendChild(updateButton);
-        dashboardContent.appendChild(buttonContainer);
-    }
 };
 
 // Закрыть дашборд
@@ -563,9 +545,8 @@ async function loadEquipmentDatabase(forceUpdate = false) {
         
         if (shouldUpdate && navigator.onLine) {
             console.log('Загрузка базы оборудования с GitHub...');
-            showNotification('Загрузка базы оборудования...', 'info');
             
-            const response = await fetch(EQUIPMENT_DB_URL + '?t=' + Date.now()); // Добавляем timestamp для избежания кэширования
+            const response = await fetch(EQUIPMENT_DB_URL + '?t=' + Date.now());
             
             if (!response.ok) {
                 throw new Error(`Ошибка HTTP: ${response.status}`);
@@ -577,20 +558,9 @@ async function loadEquipmentDatabase(forceUpdate = false) {
                 throw new Error('CSV файл пуст');
             }
             
-            // Логируем первые несколько строк для отладки
-            const lines = csvContent.split('\n');
-            console.log('Первые 3 строки CSV:');
-            for (let i = 0; i < Math.min(3, lines.length); i++) {
-                console.log(`Строка ${i + 1}: ${lines[i].substring(0, 100)}...`);
-            }
-            
             equipmentDatabase = parseCSV(csvContent);
             
             if (equipmentDatabase.length === 0) {
-                console.log('Содержимое первых 5 строк для отладки:');
-                for (let i = 0; i < Math.min(5, lines.length); i++) {
-                    console.log(`Строка ${i + 1}: "${lines[i]}"`);
-                }
                 throw new Error('Не удалось загрузить данные оборудования');
             }
             
@@ -642,6 +612,9 @@ async function loadEquipmentDatabase(forceUpdate = false) {
     // Обновляем интерфейс
     populateInvNumberSelect();
     populateLocationFilter();
+    
+    // Обновляем информацию о базе в кнопке
+    updateDBButtonInfo();
 }
 
 // Загрузка заявок
@@ -870,77 +843,25 @@ function setupInterface() {
     if (dateInput) dateInput.value = today;
     if (timeInput) timeInput.value = timeString;
     
-    // Добавляем информацию о базе оборудования
-    addDBInfo();
-    
     // Добавить обработчики событий
     addEventListeners();
 }
 
-// Добавить информацию о базе оборудования
-function addDBInfo() {
-    const buttonGroup = document.querySelector('.button-group');
-    if (!buttonGroup) return;
-    
-    const dbInfo = document.createElement('div');
-    dbInfo.style.cssText = `
-        margin-top: 10px;
-        padding: 10px;
-        background-color: #e8f5e9;
-        border-radius: 4px;
-        font-size: 12px;
-        color: #2e7d32;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    `;
-    
-    const infoText = document.createElement('span');
-    infoText.id = 'dbInfoText';
-    
-    const updateBtn = document.createElement('button');
-    updateBtn.textContent = '🔄';
-    updateBtn.title = 'Обновить базу оборудования';
-    updateBtn.style.cssText = `
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 16px;
-        padding: 5px;
-        border-radius: 50%;
-        transition: background-color 0.3s;
-    `;
-    updateBtn.onmouseover = () => updateBtn.style.backgroundColor = '#c8e6c9';
-    updateBtn.onmouseout = () => updateBtn.style.backgroundColor = 'transparent';
-    updateBtn.onclick = window.updateEquipmentDB;
-    
-    dbInfo.appendChild(infoText);
-    dbInfo.appendChild(updateBtn);
-    
-    buttonGroup.parentNode.insertBefore(dbInfo, buttonGroup.nextSibling);
-    
-    updateDBInfo();
-}
-
-// Обновить информацию о базе
-function updateDBInfo() {
-    const dbInfoText = document.getElementById('dbInfoText');
-    if (!dbInfoText) return;
+// Обновить информацию о базе на кнопке
+function updateDBButtonInfo() {
+    const updateBtn = document.querySelector('.btn-load');
+    if (!updateBtn) return;
     
     const lastUpdated = localStorage.getItem(STORAGE_KEYS.DB_LAST_UPDATED);
     const savedData = JSON.parse(localStorage.getItem(STORAGE_KEYS.EQUIPMENT_DB));
     
-    let info = '';
-    
     if (savedData && savedData.length > 0) {
         const count = savedData.length;
         const date = lastUpdated ? new Date(lastUpdated).toLocaleDateString('ru-RU') : 'неизвестно';
-        info = `База оборудования: ${count} записей (обновлено: ${date})`;
+        updateBtn.title = `База оборудования: ${count} записей (обновлено: ${date})`;
     } else {
-        info = 'База оборудования не загружена';
+        updateBtn.title = 'База оборудования не загружена';
     }
-    
-    dbInfoText.textContent = info;
 }
 
 // Заполнение выпадающего списка инвентарных номеров
@@ -1005,8 +926,8 @@ function populateInvNumberSelect() {
         handleInvNumberChange.call(invNumberSelect);
     }
     
-    // Обновляем информацию о базе
-    updateDBInfo();
+    // Обновляем информацию о базе на кнопке
+    updateDBButtonInfo();
 }
 
 // Заполнение фильтра участков
@@ -1085,7 +1006,7 @@ function addEventListeners() {
         // Ждем 5 секунд после появления интернета
         setTimeout(() => {
             loadEquipmentDatabase().then(() => {
-                updateDBInfo();
+                updateDBButtonInfo();
             }).catch(error => {
                 console.warn('Не удалось обновить базу после появления интернета:', error);
             });
