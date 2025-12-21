@@ -1,7 +1,7 @@
-// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С АВТОЗАГРУЗКОЙ БАЗЫ
+// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ
 
 // Константы
-const APP_VERSION = '2.0.4';
+const APP_VERSION = '2.0.5';
 const APP_NAME = 'Ремонтный журнал';
 const EQUIPMENT_DB_URL = 'https://raw.githubusercontent.com/aitof-stack/repair-journal/main/data/equipment_database.csv';
 const STORAGE_KEYS = {
@@ -12,12 +12,17 @@ const STORAGE_KEYS = {
     DB_LAST_UPDATED: 'equipmentDBLastUpdated'
 };
 
+// Использовать CORS прокси только для мобильных устройств (опционально)
+const USE_CORS_PROXY_FOR_MOBILE = false; // Поставьте true если CORS блокирует загрузку
+const CORS_PROXY_URL = 'https://api.allorigins.win/raw?url=';
+
 // Переменные приложения
 let equipmentDatabase = [];
 let repairRequests = [];
 let currentUser = null;
-let isOnline = true;
+let isOnline = navigator.onLine;
 let isDBLoading = false;
+let isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
 // DOM элементы
 let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
@@ -29,11 +34,60 @@ let pendingRequestsElement, completedRequestsElement, totalDowntimeElement;
 
 // Запуск при загрузке DOM
 document.addEventListener('DOMContentLoaded', function() {
-    console.log(`${APP_NAME} v${APP_VERSION} запускается...`);
+    console.log(`${APP_NAME} v${APP_VERSION} запускается на ${isMobileDevice ? 'мобильном' : 'десктопе'}...`);
+    
+    // Оптимизация для мобильных устройств
+    if (isMobileDevice) {
+        setupMobileOptimizations();
+    }
     
     // Проверяем авторизацию
     checkAuthAndInit();
 });
+
+// Оптимизации для мобильных устройств
+function setupMobileOptimizations() {
+    console.log('Применяются мобильные оптимизации...');
+    
+    // Увеличиваем размер шрифта для лучшей читаемости
+    document.documentElement.style.fontSize = '16px';
+    
+    // Увеличиваем размер полей ввода
+    const style = document.createElement('style');
+    style.textContent = `
+        @media (max-width: 768px) {
+            .form-group input, 
+            .form-group select, 
+            .form-group textarea,
+            .search-filter input,
+            .search-filter select {
+                font-size: 16px !important; /* Отключает zoom в iOS */
+                padding: 12px !important;
+                min-height: 44px !important; /* Минимальная высота для touch */
+            }
+            
+            .btn {
+                min-height: 44px !important;
+                padding: 12px 16px !important;
+                font-size: 16px !important;
+            }
+            
+            .actions-cell .btn {
+                min-height: 36px !important;
+                padding: 8px 12px !important;
+            }
+            
+            table {
+                font-size: 14px;
+            }
+            
+            th, td {
+                padding: 10px 8px !important;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
 
 // Проверка авторизации и инициализация
 function checkAuthAndInit() {
@@ -124,16 +178,21 @@ function setupSearchableSelect() {
         
         const clearSearchBtn = document.createElement('button');
         clearSearchBtn.innerHTML = '×';
-        clearSearchBtn.style.position = 'absolute';
-        clearSearchBtn.style.right = '5px';
-        clearSearchBtn.style.top = '50%';
-        clearSearchBtn.style.transform = 'translateY(-50%)';
-        clearSearchBtn.style.background = 'none';
-        clearSearchBtn.style.border = 'none';
-        clearSearchBtn.style.fontSize = '20px';
-        clearSearchBtn.style.cursor = 'pointer';
-        clearSearchBtn.style.color = '#999';
-        clearSearchBtn.style.display = 'none';
+        clearSearchBtn.style.cssText = `
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #999;
+            display: none;
+            z-index: 10;
+            min-height: 20px;
+            min-width: 20px;
+        `;
         
         clearSearchBtn.addEventListener('click', function() {
             invNumberSearch.value = '';
@@ -300,6 +359,7 @@ window.importEquipmentDB = function() {
                 
                 populateInvNumberSelect();
                 populateLocationFilter();
+                updateDBButtonInfo();
                 
             } catch (error) {
                 console.error('Ошибка обработки файла:', error);
@@ -317,7 +377,7 @@ window.importEquipmentDB = function() {
     input.click();
 };
 
-// Обновить базу оборудования
+// Обновить базу оборудования (улучшенная версия для мобильных)
 window.updateEquipmentDB = async function() {
     if (!checkAuth()) return;
     
@@ -330,9 +390,12 @@ window.updateEquipmentDB = async function() {
     
     // Добавляем индикатор загрузки на кнопку
     const updateBtn = document.querySelector('.btn-load');
-    const originalText = updateBtn.textContent;
-    updateBtn.textContent = '🔄 Загрузка...';
-    updateBtn.disabled = true;
+    const originalText = updateBtn ? updateBtn.textContent : '🔄 Обновить базу';
+    if (updateBtn) {
+        updateBtn.textContent = '🔄 Загрузка...';
+        updateBtn.disabled = true;
+        updateBtn.style.opacity = '0.7';
+    }
     
     try {
         await loadEquipmentDatabase(true); // Принудительное обновление
@@ -342,8 +405,11 @@ window.updateEquipmentDB = async function() {
         showNotification('Ошибка обновления базы: ' + error.message, 'error');
     } finally {
         isDBLoading = false;
-        updateBtn.textContent = originalText;
-        updateBtn.disabled = false;
+        if (updateBtn) {
+            updateBtn.textContent = originalText;
+            updateBtn.disabled = false;
+            updateBtn.style.opacity = '1';
+        }
     }
 };
 
@@ -405,6 +471,31 @@ window.showDashboard = function() {
             window.closeDashboard();
         }
     };
+    
+    // Добавляем кнопку обновления базы в дашборд
+    const dashboardStats = dashboardContent.querySelector('.dashboard-stats');
+    if (dashboardStats && currentUser.type === 'admin') {
+        const updateButton = document.createElement('button');
+        updateButton.textContent = '🔄 Обновить базу оборудования';
+        updateButton.style.cssText = `
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 14px;
+            display: block;
+            width: 100%;
+        `;
+        updateButton.onclick = window.updateEquipmentDB;
+        
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.marginTop = '20px';
+        buttonContainer.appendChild(updateButton);
+        dashboardContent.appendChild(buttonContainer);
+    }
 };
 
 // Закрыть дашборд
@@ -509,11 +600,81 @@ window.completeRequest = function(id) {
     showNotification(`Ремонт завершен! Время простоя: ${downtimeHours.toFixed(1)} ч`, 'success');
 };
 
-// ============ ЗАГРУЗКА ДАННЫХ ============
+// ============ ЗАГРУЗКА ДАННЫХ (ОПТИМИЗИРОВАННАЯ ДЛЯ МОБИЛЬНЫХ) ============
+
+// Безопасный fetch с обработкой ошибок для мобильных устройств
+async function safeFetch(url, options = {}, maxRetries = 3) {
+    let lastError;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            // Ждем перед повторной попыткой (кроме первой)
+            if (attempt > 0) {
+                const delay = 1000 * Math.pow(2, attempt - 1); // Экспоненциальная задержка
+                console.log(`Повторная попытка ${attempt} через ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+            
+            let targetUrl = url;
+            
+            // Используем CORS прокси для мобильных устройств если включено
+            if (USE_CORS_PROXY_FOR_MOBILE && isMobileDevice && !url.includes(CORS_PROXY_URL)) {
+                targetUrl = CORS_PROXY_URL + encodeURIComponent(url);
+                console.log('Используется CORS прокси для мобильного устройства');
+            }
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд таймаут
+            
+            const response = await fetch(targetUrl, {
+                ...options,
+                signal: controller.signal,
+                mode: 'cors',
+                headers: {
+                    'Accept': 'text/csv,text/plain,*/*',
+                    ...options.headers
+                }
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            return response;
+            
+        } catch (error) {
+            lastError = error;
+            console.warn(`Попытка ${attempt + 1} не удалась:`, error.message);
+            
+            // Если это ошибка сети (не CORS), пробуем без CORS режима
+            if (error.name === 'TypeError' && !error.message.includes('CORS')) {
+                console.log('Пробуем загрузку без явного CORS режима...');
+                try {
+                    const simpleResponse = await fetch(url);
+                    if (simpleResponse.ok) return simpleResponse;
+                } catch (simpleError) {
+                    console.warn('Простая загрузка также не удалась:', simpleError.message);
+                }
+            }
+            
+            // Если исчерпали все попытки
+            if (attempt === maxRetries) {
+                throw new Error(`Не удалось загрузить данные после ${maxRetries + 1} попыток: ${lastError.message}`);
+            }
+        }
+    }
+    
+    throw lastError;
+}
 
 // Загрузка всех данных
 async function loadAllData() {
     try {
+        // Показываем уведомление о загрузке
+        showNotification('Загрузка данных...', 'info');
+        
         // Загружаем базу оборудования и заявки параллельно
         await Promise.allSettled([
             loadEquipmentDatabase(),
@@ -521,13 +682,22 @@ async function loadAllData() {
         ]);
         
         applyFilters();
+        
+        // Скрываем уведомление
+        setTimeout(() => {
+            const notification = document.getElementById('notification');
+            if (notification && notification.textContent.includes('Загрузка данных')) {
+                notification.style.display = 'none';
+            }
+        }, 1000);
+        
     } catch (error) {
         console.error('Ошибка загрузки данных:', error);
-        showNotification('Ошибка загрузки данных', 'error');
+        showNotification('Ошибка загрузки данных. Проверьте соединение.', 'error');
     }
 }
 
-// Загрузка базы оборудования с GitHub
+// Загрузка базы оборудования с GitHub (улучшенная для мобильных)
 async function loadEquipmentDatabase(forceUpdate = false) {
     try {
         const lastUpdated = localStorage.getItem(STORAGE_KEYS.DB_LAST_UPDATED);
@@ -543,14 +713,12 @@ async function loadEquipmentDatabase(forceUpdate = false) {
                             !savedData || 
                             savedData.length === 0;
         
-        if (shouldUpdate && navigator.onLine) {
-            console.log('Загрузка базы оборудования с GitHub...');
+        if (shouldUpdate && isOnline) {
+            console.log('Загрузка базы оборудования...');
             
-            const response = await fetch(EQUIPMENT_DB_URL + '?t=' + Date.now());
-            
-            if (!response.ok) {
-                throw new Error(`Ошибка HTTP: ${response.status}`);
-            }
+            const response = await safeFetch(EQUIPMENT_DB_URL + '?t=' + Date.now(), {
+                cache: forceUpdate ? 'no-cache' : 'default'
+            });
             
             const csvContent = await response.text();
             
@@ -561,6 +729,7 @@ async function loadEquipmentDatabase(forceUpdate = false) {
             equipmentDatabase = parseCSV(csvContent);
             
             if (equipmentDatabase.length === 0) {
+                console.log('Содержимое CSV для отладки:', csvContent.substring(0, 500));
                 throw new Error('Не удалось загрузить данные оборудования');
             }
             
@@ -568,7 +737,7 @@ async function loadEquipmentDatabase(forceUpdate = false) {
             localStorage.setItem(STORAGE_KEYS.EQUIPMENT_DB, JSON.stringify(equipmentDatabase));
             localStorage.setItem(STORAGE_KEYS.DB_LAST_UPDATED, new Date().toISOString());
             
-            console.log(`Загружена база с GitHub: ${equipmentDatabase.length} записей`);
+            console.log(`Загружена база: ${equipmentDatabase.length} записей`);
             
             if (!forceUpdate) {
                 showNotification(`База оборудования обновлена (${equipmentDatabase.length} записей)`, 'success');
@@ -580,11 +749,13 @@ async function loadEquipmentDatabase(forceUpdate = false) {
             console.log('Загружена локальная база оборудования:', equipmentDatabase.length, 'записей');
             
             // Если данные старые и есть интернет, обновляем в фоне
-            if (lastUpdated && new Date(lastUpdated) < oneDayAgo && navigator.onLine) {
+            if (lastUpdated && new Date(lastUpdated) < oneDayAgo && isOnline) {
                 console.log('Фоновая проверка обновлений базы...');
-                loadEquipmentDatabase(true).catch(error => {
-                    console.warn('Фоновая загрузка не удалась:', error);
-                });
+                setTimeout(() => {
+                    loadEquipmentDatabase(true).catch(error => {
+                        console.warn('Фоновая загрузка не удалась:', error.message);
+                    });
+                }, 5000);
             }
         } else {
             // Если нет сохраненных данных и нет интернета
@@ -602,19 +773,20 @@ async function loadEquipmentDatabase(forceUpdate = false) {
         if (savedData && savedData.length > 0) {
             equipmentDatabase = savedData;
             console.log('Используем сохраненную базу после ошибки:', equipmentDatabase.length, 'записей');
+            showNotification('Ошибка загрузки. Используется локальная версия базы', 'warning');
         } else {
             equipmentDatabase = getDefaultEquipmentDatabase();
             console.log('Используем базу по умолчанию:', equipmentDatabase.length, 'записей');
-            showNotification('Ошибка загрузки базы. Используется локальная версия', 'error');
+            showNotification('Нет подключения. Используется база по умолчанию.', 'error');
         }
     }
     
     // Обновляем интерфейс
     populateInvNumberSelect();
     populateLocationFilter();
-    
-    // Обновляем информацию о базе в кнопке
     updateDBButtonInfo();
+    
+    return equipmentDatabase.length;
 }
 
 // Загрузка заявок
@@ -633,7 +805,7 @@ function loadRepairRequests() {
     updateSummary();
 }
 
-// Парсинг CSV с GitHub - УЛУЧШЕННАЯ ВЕРСИЯ
+// Парсинг CSV с GitHub
 function parseCSV(csvContent) {
     const equipment = [];
     const lines = csvContent.split('\n');
@@ -646,13 +818,10 @@ function parseCSV(csvContent) {
     
     if (firstLine.includes(';')) {
         delimiter = ';';
-        console.log('Используется разделитель: точка с запятой');
     } else if (firstLine.includes(',')) {
         delimiter = ',';
-        console.log('Используется разделитель: запятая');
     } else if (firstLine.includes('\t')) {
         delimiter = '\t';
-        console.log('Используется разделитель: табуляция');
     }
     
     // Пропускаем заголовок если он есть
@@ -663,7 +832,6 @@ function parseCSV(csvContent) {
         lines[0].toLowerCase().includes('наименование')
     )) {
         startIndex = 1;
-        console.log('Пропускаем заголовок');
     }
     
     for (let i = startIndex; i < lines.length; i++) {
@@ -717,7 +885,6 @@ function parseCSV(csvContent) {
     
     // Если не удалось распарсить, пробуем альтернативный подход
     if (equipment.length === 0 && lines.length > 1) {
-        console.log('Пробуем альтернативный метод парсинга...');
         return parseCSVAlternative(csvContent);
     }
     
@@ -845,6 +1012,9 @@ function setupInterface() {
     
     // Добавить обработчики событий
     addEventListeners();
+    
+    // Установить заголовок для кнопки обновления базы
+    updateDBButtonInfo();
 }
 
 // Обновить информацию о базе на кнопке
@@ -859,8 +1029,10 @@ function updateDBButtonInfo() {
         const count = savedData.length;
         const date = lastUpdated ? new Date(lastUpdated).toLocaleDateString('ru-RU') : 'неизвестно';
         updateBtn.title = `База оборудования: ${count} записей (обновлено: ${date})`;
+        updateBtn.textContent = `🔄 База: ${count} записей`;
     } else {
         updateBtn.title = 'База оборудования не загружена';
+        updateBtn.textContent = '🔄 Обновить базу';
     }
 }
 
@@ -879,7 +1051,7 @@ function populateInvNumberSelect() {
         invNumberSelect.appendChild(option);
         
         // Предлагаем обновить базу
-        if (navigator.onLine) {
+        if (isOnline) {
             const updateOption = document.createElement('option');
             updateOption.value = "";
             updateOption.textContent = "Нажмите 'Обновить базу'";
@@ -1000,9 +1172,28 @@ function addEventListeners() {
     if (locationFilter) locationFilter.addEventListener('change', applyFilters);
     if (monthFilter) monthFilter.addEventListener('change', applyFilters);
     
+    // Обработка касаний для мобильных устройств
+    if (isMobileDevice) {
+        document.addEventListener('touchstart', function() {}, {passive: true});
+        
+        // Предотвращаем зум при двойном тапе
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function(event) {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
+    }
+    
     // Обновление базы при появлении интернета
     window.addEventListener('online', () => {
         console.log('Интернет появился, проверяем обновления базы...');
+        isOnline = true;
+        showNotification('Соединение восстановлено', 'success');
+        checkConnection();
+        
         // Ждем 5 секунд после появления интернета
         setTimeout(() => {
             loadEquipmentDatabase().then(() => {
@@ -1011,6 +1202,13 @@ function addEventListeners() {
                 console.warn('Не удалось обновить базу после появления интернета:', error);
             });
         }, 5000);
+    });
+    
+    window.addEventListener('offline', () => {
+        console.log('Интернет пропал');
+        isOnline = false;
+        showNotification('Потеряно соединение с интернетом', 'warning');
+        checkConnection();
     });
 }
 
@@ -1213,7 +1411,7 @@ function calculateDowntimeHours(startDate, startTime, endDate, endTime) {
     }
 }
 
-// ============ ОТОБРАЖЕНИЕ ТАБЛИЦЫ ============
+// ============ ОТОБРАЖЕНИЕ ТАБЛИЦЫ (ОПТИМИЗИРОВАННОЕ ДЛЯ МОБИЛЬНЫХ) ============
 
 // Отобразить таблицу заявок
 function renderRepairTable(filteredRequests = null) {
@@ -1241,6 +1439,9 @@ function renderRepairTable(filteredRequests = null) {
         repairTableBody.appendChild(emptyRow);
         return;
     }
+    
+    // Для мобильных устройств показываем меньше колонок
+    const showCompactView = isMobileDevice && window.innerWidth < 768;
     
     requestsToRender.forEach(request => {
         const row = document.createElement('tr');
@@ -1283,24 +1484,110 @@ function renderRepairTable(filteredRequests = null) {
             actionButtons = '<span style="color: #999; font-size: 12px;">Нет доступных действий</span>';
         }
         
-        row.innerHTML = `
-            <td>${startDateTime}</td>
-            <td>${request.author}</td>
-            <td>${request.location}</td>
-            <td>${request.invNumber}</td>
-            <td title="${request.equipmentName}">${truncateText(request.equipmentName, 30)}</td>
-            <td>${request.model}</td>
-            <td>${request.machineNumber}</td>
-            <td title="${request.faultDescription}">${truncateText(request.faultDescription, 40)}</td>
-            <td>${endDateTimeDisplay}</td>
-            <td class="${statusClass}">${statusText}</td>
-            <td>${request.downtimeCount}</td>
-            <td>${downtimeHours.toFixed(1)} ч</td>
-            <td>${request.productionItem}</td>
-            <td class="actions-cell">${actionButtons}</td>
-        `;
+        if (showCompactView) {
+            // Компактный вид для мобильных
+            row.innerHTML = `
+                <td>${startDateTime}</td>
+                <td title="${request.author}">${truncateText(request.author, 15)}</td>
+                <td>${request.location}</td>
+                <td>${request.invNumber}</td>
+                <td title="${request.equipmentName}">${truncateText(request.equipmentName, 20)}</td>
+                <td class="${statusClass}">${statusText}</td>
+                <td class="actions-cell">${actionButtons}</td>
+            `;
+            row.setAttribute('data-full-info', JSON.stringify({
+                equipmentName: request.equipmentName,
+                faultDescription: request.faultDescription,
+                model: request.model,
+                machineNumber: request.machineNumber,
+                productionItem: request.productionItem
+            }));
+            
+            // Добавляем обработчик для показа полной информации
+            row.addEventListener('click', function(e) {
+                if (!e.target.closest('.actions-cell')) {
+                    const info = JSON.parse(this.getAttribute('data-full-info'));
+                    showMobileDetailsModal(info);
+                }
+            });
+        } else {
+            // Полный вид для десктопа
+            row.innerHTML = `
+                <td>${startDateTime}</td>
+                <td>${request.author}</td>
+                <td>${request.location}</td>
+                <td>${request.invNumber}</td>
+                <td title="${request.equipmentName}">${truncateText(request.equipmentName, 30)}</td>
+                <td>${request.model}</td>
+                <td>${request.machineNumber}</td>
+                <td title="${request.faultDescription}">${truncateText(request.faultDescription, 40)}</td>
+                <td>${endDateTimeDisplay}</td>
+                <td class="${statusClass}">${statusText}</td>
+                <td>${request.downtimeCount}</td>
+                <td>${downtimeHours.toFixed(1)} ч</td>
+                <td>${request.productionItem}</td>
+                <td class="actions-cell">${actionButtons}</td>
+            `;
+        }
         
         repairTableBody.appendChild(row);
+    });
+}
+
+// Показать детали заявки в модальном окне на мобильных
+function showMobileDetailsModal(info) {
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.7);
+        z-index: 2000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+    `;
+    
+    modal.innerHTML = `
+        <div style="
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">Детали заявки</h3>
+                <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="
+                    background: none;
+                    border: none;
+                    font-size: 24px;
+                    cursor: pointer;
+                    color: #666;
+                ">×</button>
+            </div>
+            <div style="line-height: 1.6;">
+                <p><strong>Оборудование:</strong> ${info.equipmentName || 'Нет данных'}</p>
+                <p><strong>Модель:</strong> ${info.model || 'Нет данных'}</p>
+                <p><strong>Номер станка:</strong> ${info.machineNumber || 'Нет данных'}</p>
+                <p><strong>Неисправность:</strong> ${info.faultDescription || 'Нет данных'}</p>
+                <p><strong>Номенклатура:</strong> ${info.productionItem || 'Нет данных'}</p>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Закрытие по клику вне окна
+    modal.addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.remove();
+        }
     });
 }
 
@@ -1549,18 +1836,6 @@ function checkConnection() {
             connectionStatus.className = 'connection-status offline';
         }
     }
-    
-    window.addEventListener('online', () => {
-        isOnline = true;
-        showNotification('Соединение восстановлено', 'success');
-        checkConnection();
-    });
-    
-    window.addEventListener('offline', () => {
-        isOnline = false;
-        showNotification('Потеряно соединение с интернетом', 'warning');
-        checkConnection();
-    });
 }
 
 // Показать уведомление
@@ -1574,13 +1849,16 @@ function showNotification(message, type = 'info') {
     notification.style.display = 'block';
     notification.style.opacity = '1';
     
+    // Для мобильных устройств показываем уведомление дольше
+    const duration = isMobileDevice ? 4000 : 3000;
+    
     setTimeout(() => {
         notification.style.opacity = '0';
         setTimeout(() => {
             notification.style.display = 'none';
             notification.style.opacity = '1';
         }, 300);
-    }, 3000);
+    }, duration);
 }
 
 // Перенаправление на страницу входа
