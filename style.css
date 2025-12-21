@@ -625,46 +625,6 @@ tbody tr:hover {
     width: 100%;
 }
 
-/* Добавьте эти стили в конец файла style.css */
-
-/* Информация о базе оборудования */
-.db-info {
-    margin-top: 15px;
-    padding: 12px;
-    background-color: #e8f5e9;
-    border-radius: 6px;
-    border: 1px solid #c8e6c9;
-}
-
-.db-info-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-#dbInfoText {
-    font-size: 13px;
-    color: #2e7d32;
-    font-weight: 500;
-}
-
-.btn-refresh {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 16px;
-    padding: 5px;
-    border-radius: 50%;
-    transition: background-color 0.3s;
-    color: #2e7d32;
-}
-
-.btn-refresh:hover {
-    background-color: #c8e6c9;
-    transform: rotate(180deg);
-    transition: transform 0.5s;
-}
-
 /* Информация о синхронизации */
 .sync-info {
     margin-top: 15px;
