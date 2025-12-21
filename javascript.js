@@ -1,7 +1,7 @@
 // ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С АВТОМАТИЧЕСКОЙ СИНХРОНИЗАЦИЕЙ
 
 // Константы
-const APP_VERSION = '2.1.1'; // Увеличиваем версию
+const APP_VERSION = '2.1.2'; // Увеличиваем версию
 const APP_NAME = 'Ремонтный журнал';
 const EQUIPMENT_DB_URL = 'https://raw.githubusercontent.com/aitof-stack/repair-journal/main/data/equipment_database.csv';
 const SYNC_INTERVAL = 30000; // 30 секунд для автоматической синхронизации
@@ -476,11 +476,23 @@ async function loadEquipmentDatabase(forceUpdate = false) {
                     throw new Error('CSV файл пуст');
                 }
                 
+                // Выводим первые 500 символов для отладки
+                console.log('Первые 500 символов CSV:', csvContent.substring(0, 500));
+                
                 equipmentDatabase = parseCSV(csvContent);
+                
+                console.log(`Распарсено ${equipmentDatabase.length} записей из CSV`);
                 
                 if (equipmentDatabase.length === 0) {
                     console.warn('Не удалось распарсить данные оборудования');
-                    throw new Error('Не удалось загрузить данные оборудования');
+                    
+                    // Попробуем альтернативный парсинг
+                    equipmentDatabase = parseCSVAlternative(csvContent);
+                    console.log(`Альтернативный парсинг: ${equipmentDatabase.length} записей`);
+                    
+                    if (equipmentDatabase.length === 0) {
+                        throw new Error('Не удалось загрузить данные оборудования');
+                    }
                 }
                 
                 // Сохраняем с отметкой времени
@@ -1143,11 +1155,16 @@ function calculateDashboardStats() {
     };
 }
 
-// ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
+// ============ ПАРСИНГ CSV ============
 
-// Парсинг CSV
+// Парсинг CSV (улучшенная версия)
 function parseCSV(csvContent) {
     try {
+        // Удаляем BOM (Byte Order Mark) если есть
+        if (csvContent.charCodeAt(0) === 0xFEFF) {
+            csvContent = csvContent.slice(1);
+        }
+        
         const lines = csvContent.split('\n');
         const result = [];
         
@@ -1156,14 +1173,29 @@ function parseCSV(csvContent) {
             return result;
         }
         
-        // Определение заголовков
-        const headers = lines[0].split(';').map(h => h.trim().replace(/"/g, ''));
+        // Определение заголовков - пробуем разные разделители
+        let headers = [];
+        let delimiter = ';';
+        
+        // Пробуем определить разделитель по первой строке
+        if (lines[0].includes(';')) {
+            delimiter = ';';
+        } else if (lines[0].includes(',')) {
+            delimiter = ',';
+        } else if (lines[0].includes('\t')) {
+            delimiter = '\t';
+        }
+        
+        console.log(`Используем разделитель: "${delimiter}"`);
+        
+        headers = lines[0].split(delimiter).map(h => h.trim().replace(/"/g, ''));
+        console.log('Заголовки CSV:', headers);
         
         for (let i = 1; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
             
-            const values = line.split(';').map(v => v.trim().replace(/"/g, ''));
+            const values = line.split(delimiter).map(v => v.trim().replace(/"/g, ''));
             const item = {};
             
             headers.forEach((header, index) => {
@@ -1172,21 +1204,72 @@ function parseCSV(csvContent) {
                 }
             });
             
-            // Стандартизация полей
-            item.invNumber = item['Инвентарный номер'] || item['Инвентарный номер'] || '';
-            item.equipmentName = item['Наименование оборудования'] || item['Наименование'] || '';
-            item.location = item['Участок'] || item['Местонахождение'] || '';
-            item.model = item['Модель'] || item['Тип'] || '';
+            // Стандартизация полей - пробуем разные варианты названий полей
+            item.invNumber = item['Инвентарный номер'] || item['Инвентарный'] || item['Инв. номер'] || item['Инвентарный_номер'] || item['Инвентарный номер'] || '';
+            item.equipmentName = item['Наименование оборудования'] || item['Наименование'] || item['Оборудование'] || item['Название'] || item['Наименование_оборудования'] || '';
+            item.location = item['Участок'] || item['Местонахождение'] || item['Местоположение'] || item['Цех'] || item['Участок_работы'] || '';
+            item.model = item['Модель'] || item['Тип'] || item['Марка'] || item['Модель_оборудования'] || '';
             
+            // Если у нас есть хотя бы инвентарный номер или название оборудования
             if (item.invNumber || item.equipmentName) {
+                // Очищаем инвентарный номер от лишних символов
+                item.invNumber = item.invNumber.replace(/[^0-9]/g, '').trim();
+                
                 result.push(item);
             }
         }
         
         console.log(`Распарсено ${result.length} записей из CSV`);
+        
+        // Если ничего не распарсили, выводим первую строку данных для отладки
+        if (result.length === 0 && lines.length > 1) {
+            console.log('Первая строка данных для отладки:', lines[1]);
+        }
+        
         return result;
     } catch (error) {
         console.error('Ошибка парсинга CSV:', error);
+        return [];
+    }
+}
+
+// Альтернативный парсинг CSV (если основной не сработал)
+function parseCSVAlternative(csvContent) {
+    try {
+        const lines = csvContent.split('\n');
+        const result = [];
+        
+        // Простой парсинг: предполагаем, что первая колонка - инвентарный номер, вторая - название и т.д.
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            // Пробуем разные разделители
+            let parts = line.split(';');
+            if (parts.length < 2) parts = line.split(',');
+            if (parts.length < 2) parts = line.split('\t');
+            
+            if (parts.length >= 2) {
+                const item = {
+                    invNumber: parts[0] ? parts[0].trim().replace(/"/g, '') : '',
+                    equipmentName: parts[1] ? parts[1].trim().replace(/"/g, '') : '',
+                    location: parts[2] ? parts[2].trim().replace(/"/g, '') : '',
+                    model: parts[3] ? parts[3].trim().replace(/"/g, '') : ''
+                };
+                
+                // Очищаем инвентарный номер
+                item.invNumber = item.invNumber.replace(/[^0-9]/g, '').trim();
+                
+                if (item.invNumber || item.equipmentName) {
+                    result.push(item);
+                }
+            }
+        }
+        
+        console.log(`Альтернативный парсинг: ${result.length} записей`);
+        return result;
+    } catch (error) {
+        console.error('Ошибка альтернативного парсинга CSV:', error);
         return [];
     }
 }
