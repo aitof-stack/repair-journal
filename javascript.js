@@ -1,7 +1,7 @@
 // ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С АВТОМАТИЧЕСКОЙ СИНХРОНИЗАЦИЕЙ
 
 // Константы
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.1.1'; // Увеличиваем версию
 const APP_NAME = 'Ремонтный журнал';
 const EQUIPMENT_DB_URL = 'https://raw.githubusercontent.com/aitof-stack/repair-journal/main/data/equipment_database.csv';
 const SYNC_INTERVAL = 30000; // 30 секунд для автоматической синхронизации
@@ -23,6 +23,7 @@ let currentUser = null;
 let isOnline = true;
 let isDBLoading = false;
 let syncInterval = null;
+let isInitialized = false; // Флаг инициализации
 
 // DOM элементы
 let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
@@ -73,6 +74,12 @@ function generateDeviceId() {
 
 // Проверка авторизации и инициализация
 function checkAuthAndInit() {
+    // Проверяем, не инициализировано ли уже приложение
+    if (isInitialized) {
+        console.log('Приложение уже инициализировано');
+        return;
+    }
+    
     const isAuthenticated = localStorage.getItem(STORAGE_KEYS.AUTH_STATUS);
     const savedUser = JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER));
     
@@ -90,6 +97,12 @@ function checkAuthAndInit() {
 
 // Основная функция инициализации
 function initApp() {
+    // Проверяем, не инициализировано ли уже приложение
+    if (isInitialized) {
+        console.log('Приложение уже инициализировано, пропускаем повторную инициализацию');
+        return;
+    }
+    
     console.log(`${APP_NAME} v${APP_VERSION}`);
     
     // Проверяем авторизацию еще раз для уверенности
@@ -132,6 +145,9 @@ function initApp() {
     
     // Запускаем автоматическую синхронизацию
     startAutoSync();
+    
+    // Помечаем приложение как инициализированное
+    isInitialized = true;
     
     console.log('Приложение успешно запущено');
 }
@@ -335,8 +351,8 @@ function addSyncInfo() {
         
         // Добавляем после информации о базе оборудования
         const dbInfo = formSection.querySelector('.db-info');
-        if (dbInfo && dbInfo.nextSibling) {
-            formSection.insertBefore(syncInfo, dbInfo.nextSibling);
+        if (dbInfo) {
+            dbInfo.insertAdjacentElement('afterend', syncInfo);
         } else {
             // Если нет dbInfo, добавляем в конец формы
             formSection.appendChild(syncInfo);
@@ -446,32 +462,41 @@ async function loadEquipmentDatabase(forceUpdate = false) {
             console.log('Загрузка базы оборудования с GitHub...');
             showNotification('Загрузка базы оборудования...', 'info');
             
-            const response = await fetch(EQUIPMENT_DB_URL + '?t=' + Date.now());
-            
-            if (!response.ok) {
-                throw new Error(`Ошибка HTTP: ${response.status}`);
-            }
-            
-            const csvContent = await response.text();
-            
-            if (!csvContent || csvContent.trim().length === 0) {
-                throw new Error('CSV файл пуст');
-            }
-            
-            equipmentDatabase = parseCSV(csvContent);
-            
-            if (equipmentDatabase.length === 0) {
-                throw new Error('Не удалось загрузить данные оборудования');
-            }
-            
-            // Сохраняем с отметкой времени
-            localStorage.setItem(STORAGE_KEYS.EQUIPMENT_DB, JSON.stringify(equipmentDatabase));
-            localStorage.setItem(STORAGE_KEYS.DB_LAST_UPDATED, new Date().toISOString());
-            
-            console.log(`Загружена база с GitHub: ${equipmentDatabase.length} записей`);
-            
-            if (!forceUpdate) {
-                showNotification(`База оборудования обновлена (${equipmentDatabase.length} записей)`, 'success');
+            try {
+                const response = await fetch(EQUIPMENT_DB_URL + '?t=' + Date.now());
+                
+                if (!response.ok) {
+                    throw new Error(`Ошибка HTTP: ${response.status}`);
+                }
+                
+                const csvContent = await response.text();
+                
+                if (!csvContent || csvContent.trim().length === 0) {
+                    console.warn('CSV файл пуст или не найден');
+                    throw new Error('CSV файл пуст');
+                }
+                
+                equipmentDatabase = parseCSV(csvContent);
+                
+                if (equipmentDatabase.length === 0) {
+                    console.warn('Не удалось распарсить данные оборудования');
+                    throw new Error('Не удалось загрузить данные оборудования');
+                }
+                
+                // Сохраняем с отметкой времени
+                localStorage.setItem(STORAGE_KEYS.EQUIPMENT_DB, JSON.stringify(equipmentDatabase));
+                localStorage.setItem(STORAGE_KEYS.DB_LAST_UPDATED, new Date().toISOString());
+                
+                console.log(`Загружена база с GitHub: ${equipmentDatabase.length} записей`);
+                
+                if (!forceUpdate) {
+                    showNotification(`База оборудования обновлена (${equipmentDatabase.length} записей)`, 'success');
+                }
+                
+            } catch (fetchError) {
+                console.warn('Ошибка загрузки с GitHub:', fetchError.message);
+                // Если не удалось загрузить с GitHub, используем сохраненные данные
+                throw fetchError;
             }
             
         } else if (savedData && savedData.length > 0) {
@@ -480,11 +505,13 @@ async function loadEquipmentDatabase(forceUpdate = false) {
             console.log('Загружена локальная база оборудования:', equipmentDatabase.length, 'записей');
             
             // Если данные старые и есть интернет, обновляем в фоне
-            if (lastUpdated && new Date(lastUpdated) < oneDayAgo && navigator.onLine) {
+            if (lastUpdated && new Date(lastUpdated) < oneDayAgo && navigator.onLine && !forceUpdate) {
                 console.log('Фоновая проверка обновлений базы...');
-                loadEquipmentDatabase(true).catch(error => {
-                    console.warn('Фоновая загрузка не удалась:', error);
-                });
+                setTimeout(() => {
+                    loadEquipmentDatabase(true).catch(error => {
+                        console.warn('Фоновая загрузка не удалась:', error.message);
+                    });
+                }, 10000); // Задержка 10 секунд
             }
         } else {
             // Если нет сохраненных данных и нет интернета
@@ -494,7 +521,7 @@ async function loadEquipmentDatabase(forceUpdate = false) {
         }
         
     } catch (error) {
-        console.error('Ошибка загрузки базы оборудования:', error);
+        console.error('Ошибка загрузки базы оборудования:', error.message);
         
         // Пробуем загрузить сохраненные данные
         const savedData = JSON.parse(localStorage.getItem(STORAGE_KEYS.EQUIPMENT_DB));
@@ -502,10 +529,11 @@ async function loadEquipmentDatabase(forceUpdate = false) {
         if (savedData && savedData.length > 0) {
             equipmentDatabase = savedData;
             console.log('Используем сохраненную базу после ошибки:', equipmentDatabase.length, 'записей');
+            showNotification('Используется сохраненная база оборудования', 'info');
         } else {
             equipmentDatabase = getDefaultEquipmentDatabase();
             console.log('Используем базу по умолчанию:', equipmentDatabase.length, 'записей');
-            showNotification('Ошибка загрузки базы. Используется локальная версия', 'error');
+            showNotification('Ошибка загрузки базы. Используется локальная версия', 'warning');
         }
     }
     
@@ -520,8 +548,14 @@ function loadRepairRequests() {
     const savedRequests = localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS);
     
     if (savedRequests) {
-        repairRequests = JSON.parse(savedRequests);
-        console.log(`Загружено ${repairRequests.length} заявок из localStorage`);
+        try {
+            repairRequests = JSON.parse(savedRequests);
+            console.log(`Загружено ${repairRequests.length} заявок из localStorage`);
+        } catch (error) {
+            console.error('Ошибка парсинга заявок:', error);
+            repairRequests = [];
+            showNotification('Ошибка загрузки заявок', 'error');
+        }
     } else {
         repairRequests = [];
         console.log('Заявки не найдены, создан новый список');
@@ -532,8 +566,13 @@ function loadRepairRequests() {
 
 // Сохранение заявок в localStorage
 function saveRepairRequests() {
-    localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
-    console.log(`Сохранено ${repairRequests.length} заявок в localStorage`);
+    try {
+        localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+        console.log(`Сохранено ${repairRequests.length} заявок в localStorage`);
+    } catch (error) {
+        console.error('Ошибка сохранения заявок:', error);
+        showNotification('Ошибка сохранения заявок', 'error');
+    }
 }
 
 // ============ ОБРАБОТКА ФОРМЫ ============
@@ -664,6 +703,10 @@ function populateInvNumberSelect(filter = '') {
     invNumberSelect.innerHTML = '<option value="">Выберите инвентарный номер</option>';
     
     if (!equipmentDatabase || equipmentDatabase.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'База оборудования не загружена';
+        invNumberSelect.appendChild(option);
         return;
     }
     
@@ -905,6 +948,20 @@ function completeRepair(requestId) {
         new Date().getMinutes().toString().padStart(2, '0'));
     if (!endTime) return;
     
+    // Валидация даты и времени
+    const endDateTime = new Date(`${endDate}T${endTime}`);
+    const startDateTime = new Date(`${request.date}T${request.time}`);
+    
+    if (isNaN(endDateTime.getTime())) {
+        showNotification('Некорректная дата или время окончания', 'error');
+        return;
+    }
+    
+    if (endDateTime <= startDateTime) {
+        showNotification('Дата окончания должна быть позже даты начала', 'error');
+        return;
+    }
+    
     // Обновление заявки
     request.status = 'completed';
     request.repairEndDate = endDate;
@@ -1090,39 +1147,48 @@ function calculateDashboardStats() {
 
 // Парсинг CSV
 function parseCSV(csvContent) {
-    const lines = csvContent.split('\n');
-    const result = [];
-    
-    if (lines.length < 2) return result;
-    
-    // Определение заголовков
-    const headers = lines[0].split(';').map(h => h.trim().replace(/"/g, ''));
-    
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
+    try {
+        const lines = csvContent.split('\n');
+        const result = [];
         
-        const values = line.split(';').map(v => v.trim().replace(/"/g, ''));
-        const item = {};
-        
-        headers.forEach((header, index) => {
-            if (values[index] !== undefined) {
-                item[header] = values[index];
-            }
-        });
-        
-        // Стандартизация полей
-        item.invNumber = item['Инвентарный номер'] || item['Инвентарный номер'] || '';
-        item.equipmentName = item['Наименование оборудования'] || item['Наименование'] || '';
-        item.location = item['Участок'] || item['Местонахождение'] || '';
-        item.model = item['Модель'] || item['Тип'] || '';
-        
-        if (item.invNumber || item.equipmentName) {
-            result.push(item);
+        if (lines.length < 2) {
+            console.warn('CSV файл содержит менее 2 строк');
+            return result;
         }
+        
+        // Определение заголовков
+        const headers = lines[0].split(';').map(h => h.trim().replace(/"/g, ''));
+        
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            const values = line.split(';').map(v => v.trim().replace(/"/g, ''));
+            const item = {};
+            
+            headers.forEach((header, index) => {
+                if (values[index] !== undefined) {
+                    item[header] = values[index];
+                }
+            });
+            
+            // Стандартизация полей
+            item.invNumber = item['Инвентарный номер'] || item['Инвентарный номер'] || '';
+            item.equipmentName = item['Наименование оборудования'] || item['Наименование'] || '';
+            item.location = item['Участок'] || item['Местонахождение'] || '';
+            item.model = item['Модель'] || item['Тип'] || '';
+            
+            if (item.invNumber || item.equipmentName) {
+                result.push(item);
+            }
+        }
+        
+        console.log(`Распарсено ${result.length} записей из CSV`);
+        return result;
+    } catch (error) {
+        console.error('Ошибка парсинга CSV:', error);
+        return [];
     }
-    
-    return result;
 }
 
 // База оборудования по умолчанию
@@ -1281,6 +1347,9 @@ window.logout = function() {
         if (syncInterval) {
             clearInterval(syncInterval);
         }
+        
+        // Сбрасываем флаг инициализации
+        isInitialized = false;
         
         // Перенаправляем на страницу входа
         window.location.href = 'login.html';
