@@ -7,8 +7,8 @@ const EQUIPMENT_DB_URL = 'https://raw.githubusercontent.com/aitof-stack/repair-j
 const STORAGE_KEYS = {
     EQUIPMENT_DB: 'equipmentDatabase',
     REPAIR_REQUESTS: 'repairRequests',
-    CURRENT_USER: 'currentUser',
-    AUTH_STATUS: 'isAuthenticated',
+    CURRENT_USER: 'repair_journal_currentUser',
+    AUTH_STATUS: 'repair_journal_isAuthenticated',
     DB_LAST_UPDATED: 'equipmentDBLastUpdated'
 };
 
