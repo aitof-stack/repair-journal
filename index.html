@@ -161,6 +161,7 @@
             gap: 10px;
             flex-wrap: wrap;
             margin-top: 20px;
+            align-items: center;
         }
         
         .btn {
@@ -171,6 +172,7 @@
             font-size: 14px;
             font-weight: bold;
             transition: all 0.3s;
+            white-space: nowrap;
         }
         
         .btn[type="submit"] {
@@ -196,6 +198,7 @@
         .btn-load {
             background-color: #2196F3;
             color: white;
+            position: relative;
         }
         
         .btn-load:hover {
@@ -529,7 +532,7 @@
                 <div class="button-group">
                     <button type="submit" class="btn">Добавить заявку</button>
                     <button type="button" class="btn btn-clear" id="clearBtn">Очистить форму</button>
-                    <button type="button" class="btn btn-load" onclick="window.updateEquipmentDB()">🔄 Обновить базу</button>
+                    <button type="button" class="btn btn-load" onclick="window.updateEquipmentDB()" title="База оборудования не загружена">🔄 Обновить базу</button>
                     <button type="button" class="btn btn-admin" onclick="window.exportRepairData()">Экспорт заявок</button>
                     <button type="button" class="btn dashboard-btn" onclick="window.showDashboard()">Дашборд</button>
                 </div>
