@@ -216,7 +216,8 @@
                 document.getElementById('loadingScreen').style.display = 'none';
                 document.getElementById('mainContainer').style.display = 'block';
                 
-                // Инициализируем приложение
+                // Инициализируем приложение (если оно еще не инициализировано)
+                // Функция initApp проверит это внутри себя
                 if (typeof initApp === 'function') {
                     initApp();
                 }
