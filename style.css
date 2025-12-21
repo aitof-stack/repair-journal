@@ -705,3 +705,51 @@ tbody tr:hover {
 .button-group {
     margin-bottom: 0;
 }
+
+/* Добавьте в конец файла style.css */
+
+/* Стили для кнопок действий */
+.btn-complete {
+    background-color: #4CAF50;
+    color: white;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.3s;
+}
+
+.btn-complete:hover:not(:disabled) {
+    background-color: #45a049;
+}
+
+.btn-complete:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.btn-delete {
+    background-color: #f44336;
+    color: white;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.3s;
+}
+
+.btn-delete:hover {
+    background-color: #d32f2f;
+}
+
+.status-pending {
+    color: #ff9800;
+    font-weight: bold;
+}
+
+.status-completed {
+    color: #4CAF50;
+    font-weight: bold;
+}
