@@ -5,8 +5,443 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Журнал заявок на ремонт оборудования</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Все стили из предыдущей версии остаются без изменений */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+        
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f5f5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .user-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .user-info-content {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        #userName {
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        #userRole {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .logout-btn {
+            background-color: white;
+            color: #4CAF50;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background-color: #f0f0f0;
+            transform: translateY(-2px);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #4CAF50;
+        }
+        
+        .access-restricted {
+            background-color: #ffebee;
+            border: 1px solid #f44336;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .access-restricted strong {
+            color: #d32f2f;
+            font-size: 18px;
+            display: block;
+            margin-bottom: 10px;
+        }
+        
+        .form-section {
+            background-color: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .form-section h2 {
+            color: #4CAF50;
+            margin-top: 0;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group label {
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: #4CAF50;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+        
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .btn[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .btn[type="submit"]:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .btn-clear {
+            background-color: #ff9800;
+            color: white;
+        }
+        
+        .btn-clear:hover {
+            background-color: #f57c00;
+        }
+        
+        .btn-load {
+            background-color: #2196F3;
+            color: white;
+        }
+        
+        .btn-load:hover {
+            background-color: #1976D2;
+        }
+        
+        .btn-admin {
+            background-color: #9C27B0;
+            color: white;
+        }
+        
+        .btn-admin:hover {
+            background-color: #7B1FA2;
+        }
+        
+        .dashboard-btn {
+            background-color: #607D8B;
+            color: white;
+        }
+        
+        .dashboard-btn:hover {
+            background-color: #455A64;
+        }
+        
+        .search-filter {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .search-filter input,
+        .search-filter select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        #searchInput {
+            flex: 2;
+        }
+        
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .summary-item {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .summary-item strong {
+            color: #555;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .summary-item span {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        
+        .scroll-hint {
+            background-color: #e8f5e9;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #2E7D32;
+            font-size: 14px;
+        }
+        
+        .scroll-icon {
+            font-size: 20px;
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(5px); }
+        }
+        
+        .table-container {
+            overflow-x: auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1200px;
+        }
+        
+        thead {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: bold;
+            border-bottom: 2px solid #45a049;
+            white-space: nowrap;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        tbody tr:hover {
+            background-color: #f9f9f9;
+        }
+        
+        .col-datetime { min-width: 160px; }
+        .col-location { min-width: 80px; }
+        .col-inv { min-width: 100px; }
+        .col-machine { min-width: 120px; }
+        .col-status { min-width: 120px; }
+        .col-count { min-width: 100px; }
+        .col-hours { min-width: 120px; }
+        .col-actions { min-width: 150px; }
+        
+        .status-pending {
+            color: #ff9800;
+            font-weight: bold;
+        }
+        
+        .status-completed {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .actions-cell {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        
+        .actions-cell .btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            margin: 2px;
+        }
+        
+        .btn-delete {
+            background-color: #f44336;
+            color: white;
+        }
+        
+        .btn-delete:hover {
+            background-color: #d32f2f;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Анимация появления */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .form-section,
+        .search-filter,
+        .table-container {
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        /* Стиль для поля поиска в выпадающем списке */
+        #invNumberSearch {
+            margin-bottom: 5px;
+        }
+        
+        /* Индикатор загрузки базы */
+        .db-loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 5px;
+        }
+    </style>
 </head>
 <body>
+    <!-- Проверка авторизации -->
+    <div id="authCheck" style="display: none;"></div>
+    
     <!-- Уведомление -->
     <div class="notification" id="notification"></div>
     
@@ -20,7 +455,7 @@
                 <span id="userName"></span>
                 <span id="userRole"></span>
             </div>
-            <button class="logout-btn" onclick="logout()">Выйти</button>
+            <button class="logout-btn" onclick="window.logout()">Выйти</button>
         </div>
         
         <!-- Заголовок -->
@@ -94,19 +529,11 @@
                 <div class="button-group">
                     <button type="submit" class="btn">Добавить заявку</button>
                     <button type="button" class="btn btn-clear" id="clearBtn">Очистить форму</button>
-                    <button type="button" class="btn btn-load" onclick="updateEquipmentDB()">🔄 Обновить базу</button>
-                    <button type="button" class="btn btn-admin" onclick="exportRepairData()">Экспорт заявок</button>
-                    <button type="button" class="btn dashboard-btn" onclick="showDashboard()">Дашборд</button>
+                    <button type="button" class="btn btn-load" onclick="window.updateEquipmentDB()">🔄 Обновить базу</button>
+                    <button type="button" class="btn btn-admin" onclick="window.exportRepairData()">Экспорт заявок</button>
+                    <button type="button" class="btn dashboard-btn" onclick="window.showDashboard()">Дашборд</button>
                 </div>
             </form>
-            
-            <!-- Информация о базе оборудования -->
-            <div class="db-info" id="dbInfo">
-                <div class="db-info-content">
-                    <span id="dbInfoText">База оборудования не загружена</span>
-                    <button class="btn-refresh" onclick="updateEquipmentDB()" title="Обновить базу">🔄</button>
-                </div>
-            </div>
         </div>
         
         <!-- Поиск и фильтры -->
@@ -126,7 +553,7 @@
         <!-- Заголовок таблицы -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; margin-bottom: 10px;">
             <h2>Заявки на ремонт</h2>
-            <button type="button" class="btn dashboard-btn" onclick="showDashboard()" style="margin: 0;">Дашборд</button>
+            <button type="button" class="btn dashboard-btn" onclick="window.showDashboard()" style="margin: 0;">Дашборд</button>
         </div>
         
         <!-- Сводная информация перед таблицей -->
@@ -181,7 +608,7 @@
         <!-- Модальное окно для дашборда -->
         <div id="dashboardModal" class="modal">
             <div class="modal-content">
-                <span class="close" onclick="closeDashboard()">&times;</span>
+                <span class="close" onclick="window.closeDashboard()">&times;</span>
                 <h2>Дашборд статистики</h2>
                 <div id="dashboardContent">
                     <!-- Содержимое дашборда будет генерироваться динамически -->
@@ -195,31 +622,33 @@
         <div style="text-align: center;">
             <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #4CAF50; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
             <p>Загрузка приложения...</p>
+            <p style="font-size: 12px; color: #666; margin-top: 10px;" id="loadingStatus">Загрузка базы оборудования с GitHub...</p>
         </div>
     </div>
 
     <script src="javascript.js"></script>
     <script>
+        // Обновляем статус загрузки
+        const loadingStatus = document.getElementById('loadingStatus');
+        
         // Проверка авторизации при загрузке
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
-                const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
-                const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
+                const isAuthenticated = localStorage.getItem('isAuthenticated');
+                const currentUser = JSON.parse(localStorage.getItem('currentUser'));
                 
                 if (!isAuthenticated || !currentUser) {
                     // Если не авторизован, перенаправляем на страницу входа
                     window.location.href = 'login.html';
-                    return;
-                }
-                
-                // Если авторизован, показываем контент
-                document.getElementById('loadingScreen').style.display = 'none';
-                document.getElementById('mainContainer').style.display = 'block';
-                
-                // Инициализируем приложение (если оно еще не инициализировано)
-                // Функция initApp проверит это внутри себя
-                if (typeof initApp === 'function') {
-                    initApp();
+                } else {
+                    // Если авторизован, показываем контент
+                    document.getElementById('loadingScreen').style.display = 'none';
+                    document.getElementById('mainContainer').style.display = 'block';
+                    
+                    // Инициализируем приложение
+                    if (typeof initApp === 'function') {
+                        initApp();
+                    }
                 }
             }, 500);
         });
