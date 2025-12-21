@@ -634,8 +634,9 @@
         // Проверка авторизации при загрузке
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
-                const isAuthenticated = localStorage.getItem('isAuthenticated');
-                const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+                // Используем правильные ключи localStorage
+                const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
+                const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
                 
                 if (!isAuthenticated || !currentUser) {
                     // Если не авторизован, перенаправляем на страницу входа
