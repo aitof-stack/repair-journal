@@ -252,28 +252,11 @@ async function syncWithServer() {
     try {
         console.log('Проверка обновлений с сервера...');
         
-        // Показываем уведомление только если есть изменения
-        const syncNotification = document.getElementById('syncNotification');
-        if (syncNotification) {
-            syncNotification.textContent = 'Синхронизация...';
-            syncNotification.className = 'notification info';
-            syncNotification.style.display = 'block';
-        }
-        
-        // Здесь можно добавить логику синхронизации с внешним API
-        // Например, отправка/получение заявок с сервера
-        
         // Обновляем время последней синхронизации
         localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
         
         // Обновляем информацию о синхронизации
         updateSyncInfo();
-        
-        setTimeout(() => {
-            if (syncNotification) {
-                syncNotification.style.display = 'none';
-            }
-        }, 2000);
         
     } catch (error) {
         console.error('Ошибка синхронизации:', error);
@@ -338,19 +321,26 @@ function addSyncInfo() {
     const formSection = document.getElementById('formSection');
     if (!formSection) return;
     
-    const syncInfo = document.createElement('div');
-    syncInfo.className = 'sync-info';
-    syncInfo.innerHTML = `
-        <div class="sync-status">
-            <span id="syncInfo">Загрузка статуса синхронизации...</span>
-            <span class="sync-indicator ${isOnline ? 'online' : 'offline'}"></span>
-        </div>
-    `;
-    
-    // Добавляем после кнопок
-    const buttonGroup = formSection.querySelector('.button-group');
-    if (buttonGroup) {
-        formSection.insertBefore(syncInfo, buttonGroup.nextSibling);
+    // Проверяем, не добавлена ли уже информация о синхронизации
+    let syncInfo = formSection.querySelector('.sync-info');
+    if (!syncInfo) {
+        syncInfo = document.createElement('div');
+        syncInfo.className = 'sync-info';
+        syncInfo.innerHTML = `
+            <div class="sync-status">
+                <span id="syncInfo">Загрузка статуса синхронизации...</span>
+                <span class="sync-indicator ${isOnline ? 'online' : 'offline'}"></span>
+            </div>
+        `;
+        
+        // Добавляем после информации о базе оборудования
+        const dbInfo = formSection.querySelector('.db-info');
+        if (dbInfo && dbInfo.nextSibling) {
+            formSection.insertBefore(syncInfo, dbInfo.nextSibling);
+        } else {
+            // Если нет dbInfo, добавляем в конец формы
+            formSection.appendChild(syncInfo);
+        }
     }
     
     // Обновляем информацию
@@ -910,7 +900,9 @@ function completeRepair(requestId) {
     const endDate = prompt('Введите дату окончания ремонта (ГГГГ-ММ-ДД):', new Date().toISOString().split('T')[0]);
     if (!endDate) return;
     
-    const endTime = prompt('Введите время окончания ремонта (ЧЧ:ММ):', new Date().toHours().toString().padStart(2, '0') + ':' + new Date().getMinutes().toString().padStart(2, '0'));
+    const endTime = prompt('Введите время окончания ремонта (ЧЧ:ММ):', 
+        new Date().getHours().toString().padStart(2, '0') + ':' + 
+        new Date().getMinutes().toString().padStart(2, '0'));
     if (!endTime) return;
     
     // Обновление заявки
