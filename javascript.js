@@ -1,7 +1,7 @@
 // ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ
 
 // Константы
-const APP_VERSION = '2.0.5';
+const APP_VERSION = '2.0.6';
 const APP_NAME = 'Ремонтный журнал';
 const EQUIPMENT_DB_URL = 'https://raw.githubusercontent.com/aitof-stack/repair-journal/main/data/equipment_database.csv';
 const STORAGE_KEYS = {
@@ -12,9 +12,9 @@ const STORAGE_KEYS = {
     DB_LAST_UPDATED: 'equipmentDBLastUpdated'
 };
 
-// Использовать CORS прокси только для мобильных устройств (опционально)
-const USE_CORS_PROXY_FOR_MOBILE = false; // Поставьте true если CORS блокирует загрузку
-const CORS_PROXY_URL = 'https://api.allorigins.win/raw?url=';
+// Всегда используем CORS прокси для мобильных устройств для GitHub
+const USE_CORS_PROXY_FOR_MOBILE = true;
+const CORS_PROXY_URL = 'https://corsproxy.io/?';
 
 // Переменные приложения
 let equipmentDatabase = [];
@@ -52,7 +52,7 @@ function setupMobileOptimizations() {
     // Увеличиваем размер шрифта для лучшей читаемости
     document.documentElement.style.fontSize = '16px';
     
-    // Увеличиваем размер полей ввода
+    // Предотвращаем зум при фокусе на полях ввода
     const style = document.createElement('style');
     style.textContent = `
         @media (max-width: 768px) {
@@ -61,15 +61,16 @@ function setupMobileOptimizations() {
             .form-group textarea,
             .search-filter input,
             .search-filter select {
-                font-size: 16px !important; /* Отключает zoom в iOS */
+                font-size: 16px !important;
                 padding: 12px !important;
-                min-height: 44px !important; /* Минимальная высота для touch */
+                min-height: 44px !important;
             }
             
             .btn {
                 min-height: 44px !important;
                 padding: 12px 16px !important;
                 font-size: 16px !important;
+                touch-action: manipulation;
             }
             
             .actions-cell .btn {
@@ -83,6 +84,26 @@ function setupMobileOptimizations() {
             
             th, td {
                 padding: 10px 8px !important;
+            }
+            
+            /* Предотвращаем зум в iOS */
+            input[type="color"],
+            input[type="date"],
+            input[type="datetime"],
+            input[type="datetime-local"],
+            input[type="email"],
+            input[type="month"],
+            input[type="number"],
+            input[type="password"],
+            input[type="search"],
+            input[type="tel"],
+            input[type="text"],
+            input[type="time"],
+            input[type="url"],
+            input[type="week"],
+            select:focus,
+            textarea {
+                font-size: 16px !important;
             }
         }
     `;
@@ -113,7 +134,9 @@ function initApp() {
     // Скрываем экран загрузки
     const loadingScreen = document.getElementById('loadingScreen');
     if (loadingScreen) {
-        loadingScreen.style.display = 'none';
+        setTimeout(() => {
+            loadingScreen.style.display = 'none';
+        }, 500);
     }
     
     // Показываем основной контейнер
@@ -603,14 +626,14 @@ window.completeRequest = function(id) {
 // ============ ЗАГРУЗКА ДАННЫХ (ОПТИМИЗИРОВАННАЯ ДЛЯ МОБИЛЬНЫХ) ============
 
 // Безопасный fetch с обработкой ошибок для мобильных устройств
-async function safeFetch(url, options = {}, maxRetries = 3) {
+async function safeFetch(url, options = {}, maxRetries = 2) {
     let lastError;
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
             // Ждем перед повторной попыткой (кроме первой)
             if (attempt > 0) {
-                const delay = 1000 * Math.pow(2, attempt - 1); // Экспоненциальная задержка
+                const delay = 1000 * Math.pow(2, attempt - 1);
                 console.log(`Повторная попытка ${attempt} через ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
@@ -620,11 +643,11 @@ async function safeFetch(url, options = {}, maxRetries = 3) {
             // Используем CORS прокси для мобильных устройств если включено
             if (USE_CORS_PROXY_FOR_MOBILE && isMobileDevice && !url.includes(CORS_PROXY_URL)) {
                 targetUrl = CORS_PROXY_URL + encodeURIComponent(url);
-                console.log('Используется CORS прокси для мобильного устройства');
+                console.log('Используется CORS прокси для мобильного устройства:', targetUrl);
             }
             
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд таймаут
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут
             
             const response = await fetch(targetUrl, {
                 ...options,
@@ -683,13 +706,13 @@ async function loadAllData() {
         
         applyFilters();
         
-        // Скрываем уведомление
+        // Скрываем уведомление через 2 секунды
         setTimeout(() => {
             const notification = document.getElementById('notification');
             if (notification && notification.textContent.includes('Загрузка данных')) {
                 notification.style.display = 'none';
             }
-        }, 1000);
+        }, 2000);
         
     } catch (error) {
         console.error('Ошибка загрузки данных:', error);
@@ -1472,12 +1495,12 @@ function renderRepairTable(filteredRequests = null) {
         let actionButtons = '';
         
         if (currentUser && currentUser.type === 'admin') {
-            actionButtons += `<button class="btn btn-delete" onclick="deleteRequest(${request.id})" title="Удалить">Удалить</button>`;
+            actionButtons += `<button class="btn-delete" onclick="deleteRequest(${request.id})" title="Удалить">Удалить</button>`;
         }
         
         if (request.status === 'pending' && currentUser && 
             (currentUser.type === 'admin' || currentUser.type === 'repair')) {
-            actionButtons += `<button class="btn" style="background-color: #2196F3; padding: 6px 12px; font-size: 13px;" onclick="completeRequest(${request.id})" title="Завершить ремонт">Завершить</button>`;
+            actionButtons += `<button class="btn-complete" onclick="completeRequest(${request.id})" title="Завершить ремонт">Завершить</button>`;
         }
         
         if (!actionButtons) {
