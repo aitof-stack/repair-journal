@@ -1,4 +1,4 @@
-const CACHE_NAME = 'repair-journal-v4';
+const CACHE_NAME = 'repair-journal-v5';
 const urlsToCache = [
   './',
   './index.html',
