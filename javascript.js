@@ -1,25 +1,14 @@
-// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ 4.0
-// С РАБОЧЕЙ СИНХРОНИЗАЦИЕЙ ЧЕРЕЗ GITHUB
+// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ 4.1.0
+// С РАБОЧЕЙ СИНХРОНИЗАЦИЕЙ БЕЗ CORS
 
 // Константы
-const APP_VERSION = '4.0.1'; // Измените на новую версию
+const APP_VERSION = '4.1.0';
 const APP_NAME = 'Ремонтный журнал';
 
-// Конфигурация GitHub
-const GITHUB_CONFIG = {
-  owner: 'aitof-stack',
-  repo: 'repair-journal',
-  branch: 'main',
-  dataPath: 'data/'
-};
-
-const GITHUB_RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/${GITHUB_CONFIG.branch}/`;
-const EQUIPMENT_DB_URL = GITHUB_RAW_BASE + GITHUB_CONFIG.dataPath + 'equipment_database.csv';
-const REPAIR_REQUESTS_URL = GITHUB_RAW_BASE + GITHUB_CONFIG.dataPath + 'repair_requests.json';
-const GITHUB_API_BASE = 'https://api.github.com/repos/';
-
-// GitHub Token (можно оставить пустым для публичного репозитория)
-const GITHUB_TOKEN = ''; // Не храните токены в клиентском коде!
+// Конфигурация
+const GITHUB_PAGES_URL = 'https://aitof-stack.github.io/repair-journal/';
+const EQUIPMENT_DB_URL = './equipment_database.csv'; // Локальный файл
+const REPAIR_REQUESTS_URL = './data/repair_requests.json'; // Относительный путь
 
 // Ключи для хранения данных
 const STORAGE_KEYS = {
@@ -279,31 +268,28 @@ window.syncAllData = async function() {
   showNotification('Начата синхронизация данных...', 'info');
   
   try {
-    // 1. Загружаем заявки с сервера
-    await loadRepairRequestsFromServer();
+    // 1. Загружаем заявки с сервера (если онлайн)
+    if (isOnline) {
+      await loadRepairRequestsFromServer();
+    }
     
     // 2. Объединяем с локальными данными
     await mergeAndSaveRequests();
     
-    // 3. Отправляем объединенные данные на сервер (если есть изменения)
-    const hasChanges = await syncWithServer();
-    
-    // 4. Обновляем базу оборудования
-    await loadEquipmentDatabase(true);
-    
-    // 5. Показываем результат
-    if (hasChanges) {
-      showNotification('Синхронизация завершена успешно! Данные обновлены.', 'success');
-    } else {
-      showNotification('Синхронизация завершена. Данные актуальны.', 'info');
+    // 3. Обновляем базу оборудования (если онлайн)
+    if (isOnline) {
+      await loadEquipmentDatabase(true);
     }
     
-    // 6. Обновляем интерфейс
+    // 4. Показываем результат
+    showNotification('Синхронизация завершена!', 'success');
+    
+    // 5. Обновляем интерфейс
     renderRepairTable();
     updateSummary();
     updateDBButtonInfo();
     
-    // 7. Сохраняем время последней синхронизации
+    // 6. Сохраняем время последней синхронизации
     localStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, new Date().toISOString());
     
   } catch (error) {
@@ -315,84 +301,6 @@ window.syncAllData = async function() {
   }
 };
 
-// Синхронизация с сервером
-async function syncWithServer() {
-  if (!isOnline) {
-    throw new Error('Нет подключения к интернету. Проверьте соединение.');
-  }
-  
-  try {
-    // Проверяем, есть ли изменения для отправки
-    if (pendingSyncRequests.length === 0) {
-      console.log('Нет изменений для синхронизации');
-      return false;
-    }
-    
-    console.log('Начинаем синхронизацию с сервером...');
-    
-    // 1. Создаем новый массив заявок с нашими изменениями
-    let mergedRequests = [...repairRequests];
-    
-    // 2. Применяем ожидающие изменения
-    pendingSyncRequests.forEach(pending => {
-      const index = mergedRequests.findIndex(r => r.id === pending.id);
-      
-      if (pending.deleted) {
-        // Удаляем заявку
-        if (index !== -1) {
-          mergedRequests.splice(index, 1);
-        }
-      } else if (index !== -1) {
-        // Обновляем существующую заявку
-        mergedRequests[index] = { ...mergedRequests[index], ...pending };
-      } else {
-        // Добавляем новую заявку
-        mergedRequests.push(pending);
-      }
-    });
-    
-    // 3. Добавляем метаданные о синхронизации
-    mergedRequests = mergedRequests.map(request => ({
-      ...request,
-      lastSynced: new Date().toISOString(),
-      syncDeviceId: request.syncDeviceId || deviceId
-    }));
-    
-    // 4. Генерируем новый хэш данных
-    const newHash = generateDataHash(mergedRequests);
-    const oldHash = localStorage.getItem(STORAGE_KEYS.LAST_SYNC_HASH) || '';
-    
-    // 5. Если данные изменились, отправляем на сервер
-    if (newHash !== oldHash) {
-      console.log('Данные изменились, отправляем на сервер...');
-      
-      // В реальном приложении здесь был бы вызов GitHub API
-      // Для демонстрации просто сохраняем локально
-      localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(mergedRequests));
-      localStorage.setItem(STORAGE_KEYS.LAST_SYNC_HASH, newHash);
-      
-      // Очищаем ожидающие заявки
-      pendingSyncRequests = [];
-      savePendingSyncRequests();
-      
-      // Обновляем локальные данные
-      repairRequests = mergedRequests;
-      
-      console.log('Данные успешно синхронизированы. Новый хэш:', newHash);
-      return true;
-    } else {
-      console.log('Данные не изменились, синхронизация не требуется');
-      pendingSyncRequests = [];
-      savePendingSyncRequests();
-      return false;
-    }
-    
-  } catch (error) {
-    console.error('Ошибка синхронизации с сервером:', error);
-    throw error;
-  }
-}
-
 // Генерация хэша данных
 function generateDataHash(data) {
   const jsonString = JSON.stringify(data);
@@ -400,7 +308,7 @@ function generateDataHash(data) {
   for (let i = 0; i < jsonString.length; i++) {
     const char = jsonString.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = hash & hash;
   }
   return Math.abs(hash).toString(36);
 }
@@ -410,15 +318,12 @@ async function loadRepairRequestsFromServer() {
   try {
     console.log('Загрузка заявок с сервера...');
     
-    // Добавляем случайный параметр для предотвращения кэширования
-    const url = REPAIR_REQUESTS_URL + '?t=' + Date.now() + '&nocache=' + Math.random();
-    
-    const response = await fetch(url, {
+    // Используем fetch с обработкой CORS
+    const response = await fetch(REPAIR_REQUESTS_URL + '?t=' + Date.now(), {
       mode: 'cors',
       cache: 'no-cache',
       headers: {
-        'Accept': 'application/json,text/plain,*/*',
-        'Cache-Control': 'no-cache'
+        'Accept': 'application/json'
       }
     });
     
@@ -427,42 +332,41 @@ async function loadRepairRequestsFromServer() {
         console.log('Файл заявок не найден на сервере');
         return [];
       }
-      throw new Error(`Ошибка сервера: ${response.status} ${response.statusText}`);
+      throw new Error(`Ошибка сервера: ${response.status}`);
     }
     
-    const text = await response.text();
-    
-    if (!text.trim()) {
-      console.log('Пустой ответ от сервера');
-      return [];
-    }
-    
-    try {
-      const data = JSON.parse(text);
-      console.log('Загружено заявок с сервера:', data.length);
-      return Array.isArray(data) ? data.filter(item => !item.deleted) : [];
-    } catch (parseError) {
-      console.error('Ошибка парсинга JSON:', parseError);
-      return [];
-    }
+    const data = await response.json();
+    console.log('Загружено заявок с сервера:', data.length);
+    return Array.isArray(data) ? data.filter(item => !item.deleted) : [];
     
   } catch (error) {
     console.error('Ошибка загрузки заявок с сервера:', error);
     
-    // Пробуем альтернативный метод через proxy
-    try {
-      console.log('Пробуем альтернативный метод загрузки...');
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(REPAIR_REQUESTS_URL)}`;
-      const response = await fetch(proxyUrl, { cache: 'no-cache' });
-      
-      if (response.ok) {
-        const data = await response.json();
-        return Array.isArray(data) ? data : [];
-      }
-    } catch (proxyError) {
-      console.error('Альтернативный метод также не сработал:', proxyError);
+    // Если CORS ошибка, пробуем альтернативный метод
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      console.log('CORS ошибка, пробуем альтернативный метод...');
+      return await loadRepairRequestsAlternative();
     }
     
+    return [];
+  }
+}
+
+// Альтернативный метод загрузки заявок (для локальной разработки)
+async function loadRepairRequestsAlternative() {
+  try {
+    // Пробуем загрузить с относительного пути
+    const response = await fetch('./repair_requests.json?t=' + Date.now());
+    
+    if (response.ok) {
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    }
+    
+    return [];
+    
+  } catch (error) {
+    console.error('Альтернативный метод загрузки не сработал:', error);
     return [];
   }
 }
@@ -470,8 +374,11 @@ async function loadRepairRequestsFromServer() {
 // Объединить и сохранить заявки
 async function mergeAndSaveRequests() {
   try {
-    // Загружаем серверные данные
-    const serverRequests = await loadRepairRequestsFromServer();
+    // Загружаем серверные данные (если онлайн)
+    let serverRequests = [];
+    if (isOnline) {
+      serverRequests = await loadRepairRequestsFromServer();
+    }
     
     // Загружаем локальные данные
     const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
@@ -833,43 +740,21 @@ async function loadEquipmentDatabase(forceUpdate = false) {
                         savedData.length === 0;
     
     if (shouldUpdate && isOnline) {
-      console.log('Загрузка базы оборудования с сервера...');
+      console.log('Загрузка базы оборудования...');
       
-      // Используем CORS proxy для обхода ограничений
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(EQUIPMENT_DB_URL + '?t=' + Date.now())}`;
-      console.log('Используем proxy URL:', proxyUrl);
-      
-      const response = await fetch(proxyUrl, {
-        cache: 'no-cache',
-        headers: {
-          'Accept': 'text/plain,text/csv,*/*'
-        }
-      });
+      const response = await fetch(EQUIPMENT_DB_URL + '?t=' + Date.now());
       
       if (!response.ok) {
         throw new Error(`Ошибка HTTP ${response.status}: ${response.statusText}`);
       }
       
-      let csvContent = await response.text();
-      
-      // Пробуем разные кодировки для Яндекс.Браузера
-      if (!csvContent || csvContent.trim().length === 0) {
-        // Пробуем загрузить напрямую
-        const directResponse = await fetch(EQUIPMENT_DB_URL + '?t=' + Date.now(), {
-          mode: 'cors',
-          cache: 'no-cache'
-        });
-        
-        if (directResponse.ok) {
-          csvContent = await directResponse.text();
-        }
-      }
+      const csvContent = await response.text();
       
       if (!csvContent || csvContent.trim().length === 0) {
         throw new Error('CSV файл пуст или не загружен');
       }
       
-      console.log('CSV загружен, длина:', csvContent.length, 'первые 100 символов:', csvContent.substring(0, 100));
+      console.log('CSV загружен, длина:', csvContent.length);
       
       equipmentDatabase = parseCSV(csvContent);
       
@@ -1003,7 +888,7 @@ function parseCSV(csvContent) {
     if (!line || line === ';' || line === ',') continue;
     
     try {
-      // Простой парсинг для Яндекс.Браузера
+      // Простой парсинг
       const parts = line.split(delimiter).map(part => {
         let clean = part.trim();
         // Удаляем кавычки если есть
@@ -1027,8 +912,7 @@ function parseCSV(csvContent) {
             item.name && 
             item.name.length > 2 &&
             !item.name.toLowerCase().includes('наименование') &&
-            !item.name.toLowerCase().includes('оборудование') &&
-            !isNaN(parseInt(item.invNumber))) {
+            !item.name.toLowerCase().includes('оборудование')) {
           equipment.push(item);
         }
       }
@@ -1075,8 +959,7 @@ function parseCSVAlternative(csvContent) {
       if (item.invNumber && 
           item.name && 
           item.name.length > 2 &&
-          !item.name.toLowerCase().includes('наименование') &&
-          parseInt(item.invNumber) > 0) {
+          !item.name.toLowerCase().includes('наименование')) {
         equipment.push(item);
       }
     }
