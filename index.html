@@ -8,6 +8,7 @@
     <meta name="theme-color" content="#4CAF50">
     <title>Журнал заявок на ремонт оборудования</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
     <style>
         * {
             -webkit-tap-highlight-color: transparent;
@@ -608,7 +609,7 @@
                     
                     <div class="form-group">
                         <label for="invNumber">Инвентарный номер:</label>
-                        <input type="text" id="invNumberSearch" placeholder="Поиск по номеру или названию...">
+                        <input type="text" id="invNumberSearch" placeholder="Поиск по номеру или названию..." autocomplete="off">
                         <select id="invNumber" required>
                             <option value="">Выберите инвентарный номер</option>
                         </select>
