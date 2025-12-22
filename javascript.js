@@ -1,15 +1,15 @@
-// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ 4.1.2
+// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ 4.1.3
 // С РАБОЧЕЙ СИНХРОНИЗАЦИЕЙ ЧЕРЕЗ GITHUB GIST
 
 // Константы
-const APP_VERSION = '4.1.2';
+const APP_VERSION = '4.1.3';
 const APP_NAME = 'Ремонтный журнал';
 
 // Настройки GitHub Gist
 const GIST_ID = 'd356b02c2c182270935739995790fc20';
 const GIST_FILENAME = 'repair_requests.json';
 
-// URL для работы с Gist API
+// URL для работы с Gist API (ИСПРАВЛЕНО - правильные URL)
 const GIST_API_URL = `https://api.github.com/gists/${GIST_ID}`;
 const GIST_RAW_URL = `https://gist.githubusercontent.com/aitof-stack/${GIST_ID}/raw/${GIST_FILENAME}`;
 
