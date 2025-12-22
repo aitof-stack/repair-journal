@@ -9,7 +9,7 @@ const APP_NAME = 'Ремонтный журнал';
 const GIST_ID = 'd356b02c2c182270935739995790fc20';
 const GIST_FILENAME = 'repair_requests.json';
 
-// URL для работы с Gist API (ИСПРАВЛЕНО - правильные URL)
+// URL для работы с Gist API
 const GIST_API_URL = `https://api.github.com/gists/${GIST_ID}`;
 const GIST_RAW_URL = `https://gist.githubusercontent.com/aitof-stack/${GIST_ID}/raw/${GIST_FILENAME}`;
 
@@ -25,7 +25,7 @@ const STORAGE_KEYS = {
   SYNC_PENDING: 'syncPendingRequests_v4',
   DEVICE_ID: 'deviceId_v4',
   LAST_SYNC_HASH: 'lastSyncHash_v4',
-  GITHUB_TOKEN: 'github_token_secure' // Безопасное хранение токена
+  GITHUB_TOKEN: 'github_token_secure'
 };
 
 // Переменные приложения
@@ -39,6 +39,12 @@ let pendingSyncRequests = [];
 let deviceId = null;
 let lastSyncHash = null;
 let githubToken = '';
+
+// DOM элементы
+let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
+let machineNumberInput, authorInput, clearBtn, repairTableBody;
+let searchInput, statusFilter, locationFilter, monthFilter;
+let totalRequestsElement, pendingRequestsElement, completedRequestsElement, totalDowntimeElement;
 
 // ============ ИНИЦИАЛИЗАЦИЯ ============
 
@@ -55,7 +61,6 @@ function generateDeviceId() {
 // Загрузка GitHub токена из безопасного хранилища
 function loadGitHubToken() {
   try {
-    // Сначала пробуем загрузить из localStorage
     const token = localStorage.getItem(STORAGE_KEYS.GITHUB_TOKEN);
     if (token) {
       githubToken = token;
@@ -63,7 +68,6 @@ function loadGitHubToken() {
       return true;
     }
     
-    // Пробуем загрузить из sessionStorage (для текущей сессии)
     const sessionToken = sessionStorage.getItem(STORAGE_KEYS.GITHUB_TOKEN);
     if (sessionToken) {
       githubToken = sessionToken;
@@ -71,12 +75,10 @@ function loadGitHubToken() {
       return true;
     }
     
-    // Если у пользователя уже был токен в старом формате
     const oldToken = localStorage.getItem('github_token');
     if (oldToken) {
       githubToken = oldToken;
       console.log('GitHub Token загружен из старого хранилища');
-      // Мигрируем в новое хранилище
       saveGitHubToken(oldToken, true);
       localStorage.removeItem('github_token');
       return true;
@@ -95,11 +97,9 @@ function loadGitHubToken() {
 function saveGitHubToken(token, remember = true) {
   try {
     if (remember) {
-      // Сохраняем в localStorage (постоянно)
       localStorage.setItem(STORAGE_KEYS.GITHUB_TOKEN, token);
       console.log('GitHub Token сохранен в постоянное хранилище');
     } else {
-      // Сохраняем только в sessionStorage (до закрытия браузера)
       sessionStorage.setItem(STORAGE_KEYS.GITHUB_TOKEN, token);
       console.log('GitHub Token сохранен для текущей сессии');
     }
@@ -131,7 +131,6 @@ function clearGitHubToken() {
 function isValidToken(token) {
   if (!token || token.length < 40) return false;
   
-  // Проверяем, что токен начинается с ghp_ (GitHub Personal Access Token)
   if (!token.startsWith('ghp_')) {
     console.warn('Токен должен начинаться с ghp_');
     return false;
@@ -293,7 +292,6 @@ function requestGitHubToken(force = false) {
           saveBtn.disabled = false;
         }
       }).catch(error => {
-        // Если проверка не удалась, все равно сохраняем токен (может быть проблема с сетью)
         console.warn('Не удалось проверить токен через API:', error);
         saveGitHubToken(token, rememberToken.checked);
         tokenModal.remove();
@@ -336,7 +334,6 @@ async function initGitHubToken() {
           showNotification('Токен устарел или недействителен. Обновите его через меню синхронизации.', 'warning');
         }
       } catch (error) {
-        // Игнорируем ошибки проверки в фоне
         console.log('Фоновая проверка токена не удалась:', error.message);
       }
     }, 5000);
@@ -347,17 +344,61 @@ async function initGitHubToken() {
 document.addEventListener('DOMContentLoaded', function() {
   console.log(`${APP_NAME} v${APP_VERSION} запускается...`);
   
+  // Устанавливаем таймаут на инициализацию
+  const initTimeout = setTimeout(() => {
+    console.warn('Инициализация превысила время ожидания, принудительный запуск');
+    forceAppStart();
+  }, 15000); // 15 секунд таймаут
+  
   deviceId = generateDeviceId();
   console.log('Device ID:', deviceId);
   
-  // Инициализируем токен
   initGitHubToken();
-  
   loadPendingSyncRequests();
   lastSyncHash = localStorage.getItem(STORAGE_KEYS.LAST_SYNC_HASH) || '';
   
-  checkAuthAndInit();
+  try {
+    checkAuthAndInit();
+    clearTimeout(initTimeout);
+  } catch (error) {
+    console.error('Ошибка инициализации:', error);
+    clearTimeout(initTimeout);
+    forceAppStart();
+  }
 });
+
+// Аварийный запуск приложения
+function forceAppStart() {
+  const loadingScreen = document.getElementById('loadingScreen');
+  const mainContainer = document.getElementById('mainContainer');
+  const userInfo = document.getElementById('userInfo');
+  
+  if (loadingScreen) loadingScreen.style.display = 'none';
+  if (mainContainer) mainContainer.style.display = 'block';
+  if (userInfo) userInfo.style.display = 'none';
+  
+  showNotification('Приложение запущено в безопасном режиме', 'warning');
+  
+  // Показываем кнопку входа для аварийного доступа
+  const emergencyLogin = document.createElement('div');
+  emergencyLogin.innerHTML = `
+    <div style="text-align: center; padding: 20px; background: #fff3e0; border-radius: 8px; margin-bottom: 20px;">
+      <h3 style="color: #f57c00;">Аварийный доступ</h3>
+      <p style="margin-bottom: 15px;">Если приложение не загружается, используйте эти кнопки:</p>
+      <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+        <button onclick="window.location.href='login.html'" 
+                style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px;">
+          Перейти к входу
+        </button>
+        <button onclick="window.forceUpdate()" 
+                style="padding: 10px 20px; background: #ff9800; color: white; border: none; border-radius: 4px;">
+          Очистить все данные
+        </button>
+      </div>
+    </div>
+  `;
+  document.querySelector('.container').prepend(emergencyLogin);
+}
 
 // Загрузить ожидающие синхронизацию заявки
 function loadPendingSyncRequests() {
@@ -402,28 +443,46 @@ function checkAuthAndInit() {
 function initApp() {
   console.log(`${APP_NAME} v${APP_VERSION} инициализация...`);
   
-  const loadingScreen = document.getElementById('loadingScreen');
-  if (loadingScreen) {
-    setTimeout(() => {
+  try {
+    const loadingScreen = document.getElementById('loadingScreen');
+    const mainContainer = document.getElementById('mainContainer');
+    
+    if (loadingScreen) {
       loadingScreen.style.display = 'none';
-    }, 500);
+    }
+    
+    if (mainContainer) {
+      mainContainer.style.display = 'block';
+    }
+    
+    initDOMElements();
+    setupRoleBasedUI();
+    showUserInfo();
+    
+    // Загружаем данные асинхронно
+    setTimeout(() => {
+      loadAllData().then(() => {
+        console.log('Данные успешно загружены');
+      }).catch(error => {
+        console.error('Ошибка загрузки данных:', error);
+      });
+    }, 100);
+    
+    setupInterface();
+    checkConnection();
+    setupSearchableSelect();
+    updateSyncMessage();
+    
+    console.log('Приложение успешно запущено');
+    
+  } catch (error) {
+    console.error('Критическая ошибка инициализации:', error);
+    showNotification('Ошибка инициализации приложения', 'error');
+    
+    // Пытаемся восстановить базовый функционал
+    const loadingScreen = document.getElementById('loadingScreen');
+    if (loadingScreen) loadingScreen.style.display = 'none';
   }
-  
-  const mainContainer = document.getElementById('mainContainer');
-  if (mainContainer) {
-    mainContainer.style.display = 'block';
-  }
-  
-  initDOMElements();
-  setupRoleBasedUI();
-  showUserInfo();
-  loadAllData();
-  setupInterface();
-  checkConnection();
-  setupSearchableSelect();
-  updateSyncMessage();
-  
-  console.log('Приложение успешно запущено');
 }
 
 // Инициализация DOM элементов
