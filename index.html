@@ -225,6 +225,17 @@
             background-color: #455A64;
         }
         
+        .sync-btn {
+            background-color: #9C27B0;
+            color: white;
+        }
+        
+        .sync-btn:hover {
+            background-color: #7B1FA2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
         .search-filter {
             background-color: white;
             padding: 15px;
@@ -442,6 +453,59 @@
             margin-left: 5px;
         }
         
+        /* Индикатор синхронизации */
+        .sync-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .sync-indicator.syncing {
+            background-color: #FF9800;
+            animation: pulse 1s infinite;
+        }
+        
+        .sync-indicator.success {
+            background-color: #4CAF50;
+        }
+        
+        .sync-indicator.error {
+            background-color: #F44336;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        /* Сообщение о синхронизации */
+        .sync-message {
+            background-color: #e3f2fd;
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            border-left: 4px solid #2196F3;
+            font-size: 14px;
+        }
+        
+        .sync-message.success {
+            background-color: #e8f5e9;
+            border-left-color: #4CAF50;
+        }
+        
+        .sync-message.error {
+            background-color: #ffebee;
+            border-left-color: #F44336;
+        }
+        
+        .sync-message.warning {
+            background-color: #fff3e0;
+            border-left-color: #FF9800;
+        }
+        
         /* Стили для мобильных устройств */
         @media (max-width: 768px) {
             .container {
@@ -484,6 +548,10 @@
                 flex-direction: column;
                 text-align: center;
                 gap: 10px;
+            }
+            
+            .sync-btn {
+                order: 3;
             }
         }
         
@@ -598,6 +666,7 @@
                     <button type="button" class="btn btn-load" onclick="window.updateEquipmentDB()" title="База оборудования не загружена">🔄 Обновить базу</button>
                     <button type="button" class="btn btn-admin" onclick="window.exportRepairData()">Экспорт заявок</button>
                     <button type="button" class="btn dashboard-btn" onclick="window.showDashboard()">Дашборд</button>
+                    <button type="button" class="btn sync-btn" onclick="window.syncAllData()">🔄 Синхронизация</button>
                 </div>
             </form>
         </div>
@@ -619,7 +688,10 @@
         <!-- Заголовок таблицы -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; margin-bottom: 10px;">
             <h2>Заявки на ремонт</h2>
-            <button type="button" class="btn dashboard-btn" onclick="window.showDashboard()" style="margin: 0;">Дашборд</button>
+            <div>
+                <button type="button" class="btn dashboard-btn" onclick="window.showDashboard()" style="margin-right: 10px;">Дашборд</button>
+                <button type="button" class="btn sync-btn" onclick="window.syncAllData()">🔄 Синхронизация</button>
+            </div>
         </div>
         
         <!-- Сводная информация перед таблицей -->
@@ -636,6 +708,11 @@
             <div class="summary-item">
                 <strong>Общее время простоя:</strong> <span id="totalDowntime">0 ч</span>
             </div>
+        </div>
+        
+        <!-- Сообщение о синхронизации (будет отображаться при наличии ожидающих синхронизаций) -->
+        <div class="sync-message" id="syncMessage" style="display: none;">
+            <span id="syncMessageText"></span>
         </div>
         
         <!-- Подсказка для скролла -->
@@ -692,46 +769,96 @@
         </div>
     </div>
 
-    <!-- Оставляем всю предыдущую часть без изменений, только обновляем script блок в конце -->
-
-<script src="javascript.js"></script>
-<script>
-    // Регистрация Service Worker
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-            navigator.serviceWorker.register('service-worker.js')
-                .then(function(registration) {
-                    console.log('Service Worker зарегистрирован:', registration.scope);
-                    registration.update();
-                })
-                .catch(function(error) {
-                    console.log('Ошибка регистрации Service Worker:', error);
-                });
-        });
-    }
-    
-    // Проверка авторизации при загрузке
-    document.addEventListener('DOMContentLoaded', function() {
-        const loadingStatus = document.getElementById('loadingStatus');
-        loadingStatus.textContent = 'Проверка авторизации...';
+    <script src="javascript.js"></script>
+    <script>
+        // Регистрация Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(function(registration) {
+                        console.log('Service Worker зарегистрирован:', registration.scope);
+                        registration.update(); // Проверка обновлений
+                    })
+                    .catch(function(error) {
+                        console.log('Ошибка регистрации Service Worker:', error);
+                    });
+            });
+        }
         
-        setTimeout(function() {
-            const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
-            const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
+        // Проверка авторизации при загрузке
+        document.addEventListener('DOMContentLoaded', function() {
+            const loadingStatus = document.getElementById('loadingStatus');
+            loadingStatus.textContent = 'Проверка авторизации...';
             
-            if (!isAuthenticated || !currentUser) {
-                loadingStatus.textContent = 'Перенаправление на страницу входа...';
-                window.location.href = 'login.html';
-            } else {
-                document.getElementById('loadingScreen').style.display = 'none';
-                document.getElementById('mainContainer').style.display = 'block';
+            setTimeout(function() {
+                // Используем правильные ключи localStorage
+                const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
+                const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
                 
-                if (typeof initApp === 'function') {
-                    initApp();
+                if (!isAuthenticated || !currentUser) {
+                    // Если не авторизован, перенаправляем на страницу входа
+                    loadingStatus.textContent = 'Перенаправление на страницу входа...';
+                    window.location.href = 'login.html';
+                } else {
+                    // Если авторизован, показываем контент
+                    document.getElementById('loadingScreen').style.display = 'none';
+                    document.getElementById('mainContainer').style.display = 'block';
+                    
+                    // Инициализируем приложение
+                    if (typeof initApp === 'function') {
+                        initApp();
+                    }
                 }
+            }, 1000);
+        });
+        
+        // Функция для обновления сообщения о синхронизации
+        function updateSyncMessage() {
+            const syncMessage = document.getElementById('syncMessage');
+            const syncMessageText = document.getElementById('syncMessageText');
+            
+            if (!syncMessage || !syncMessageText) return;
+            
+            try {
+                // Пытаемся получить количество ожидающих синхронизацию заявок
+                const pending = localStorage.getItem('syncPendingRequests_v3');
+                const pendingCount = pending ? JSON.parse(pending).length : 0;
+                
+                if (pendingCount > 0) {
+                    syncMessageText.textContent = `⚠️ У вас есть ${pendingCount} заявок, ожидающих синхронизации. Нажмите кнопку "🔄 Синхронизация" для отправки на сервер.`;
+                    syncMessage.className = 'sync-message warning';
+                    syncMessage.style.display = 'block';
+                } else {
+                    const lastSync = localStorage.getItem('lastSyncTime_v3');
+                    if (lastSync) {
+                        const lastSyncDate = new Date(lastSync);
+                        const now = new Date();
+                        const diffHours = Math.floor((now - lastSyncDate) / (1000 * 60 * 60));
+                        
+                        if (diffHours > 24) {
+                            syncMessageText.textContent = `🔄 Последняя синхронизация была ${diffHours} часов назад. Рекомендуется выполнить синхронизацию.`;
+                            syncMessage.className = 'sync-message';
+                            syncMessage.style.display = 'block';
+                        } else {
+                            syncMessage.style.display = 'none';
+                        }
+                    } else {
+                        syncMessageText.textContent = '🔄 Данные еще не синхронизировались. Нажмите кнопку "🔄 Синхронизация" для первой синхронизации.';
+                        syncMessage.className = 'sync-message';
+                        syncMessage.style.display = 'block';
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка при обновлении сообщения синхронизации:', error);
+                syncMessage.style.display = 'none';
             }
-        }, 1000);
-    });
-</script>
+        }
+        
+        // Обновляем сообщение о синхронизации каждые 5 минут
+        setInterval(updateSyncMessage, 300000);
+        
+        // Обновляем сообщение о синхронизации при загрузке
+        setTimeout(updateSyncMessage, 2000);
+    </script>
 </body>
 </html>
