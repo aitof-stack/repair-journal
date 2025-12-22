@@ -692,44 +692,46 @@
         </div>
     </div>
 
-    <script src="javascript.js"></script>
-    <script>
-        // Регистрация Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('service-worker.js')
-                    .then(function(registration) {
-                        console.log('Service Worker зарегистрирован:', registration.scope);
-                        registration.update();
-                    })
-                    .catch(function(error) {
-                        console.log('Ошибка регистрации Service Worker:', error);
-                    });
-            });
-        }
-    
-       // Проверка авторизации при загрузке
-       document.addEventListener('DOMContentLoaded', function() {
-           const loadingStatus = document.getElementById('loadingStatus');
-           loadingStatus.textContent = 'Проверка авторизации...';
-        
-           setTimeout(function() {
-               const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
-               const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
-            
-               if (!isAuthenticated || !currentUser) {
-                   loadingStatus.textContent = 'Перенаправление на страницу входа...';
-                   window.location.href = 'login.html';
-               } else {
-                   document.getElementById('loadingScreen').style.display = 'none';
-                   document.getElementById('mainContainer').style.display = 'block';
-                
-                   if (typeof initApp === 'function') {
-                       initApp();
-                   }
-               }
-           }, 1000);
+    <!-- Оставляем всю предыдущую часть без изменений, только обновляем script блок в конце -->
+
+<script src="javascript.js"></script>
+<script>
+    // Регистрация Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(function(registration) {
+                    console.log('Service Worker зарегистрирован:', registration.scope);
+                    registration.update();
+                })
+                .catch(function(error) {
+                    console.log('Ошибка регистрации Service Worker:', error);
+                });
         });
-    </script>
+    }
+    
+    // Проверка авторизации при загрузке
+    document.addEventListener('DOMContentLoaded', function() {
+        const loadingStatus = document.getElementById('loadingStatus');
+        loadingStatus.textContent = 'Проверка авторизации...';
+        
+        setTimeout(function() {
+            const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
+            const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
+            
+            if (!isAuthenticated || !currentUser) {
+                loadingStatus.textContent = 'Перенаправление на страницу входа...';
+                window.location.href = 'login.html';
+            } else {
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('mainContainer').style.display = 'block';
+                
+                if (typeof initApp === 'function') {
+                    initApp();
+                }
+            }
+        }, 1000);
+    });
+</script>
 </body>
 </html>
