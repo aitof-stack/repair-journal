@@ -1,4 +1,4 @@
-const CACHE_NAME = 'repair-journal-v4.1.2';
+const CACHE_NAME = 'repair-journal-v4.1.3';
 const urlsToCache = [
   './',
   './index.html',
@@ -13,12 +13,12 @@ const urlsToCache = [
 
 // Установка Service Worker
 self.addEventListener('install', event => {
-  console.log('[Service Worker] Установка v5...');
+  console.log('[Service Worker] Установка v4.1.3...');
   
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[Service Worker] Кэширование файлов v5');
+        console.log('[Service Worker] Кэширование файлов v4.1.3');
         return cache.addAll(urlsToCache).catch(error => {
           console.error('[Service Worker] Ошибка кэширования:', error);
         });
@@ -29,7 +29,7 @@ self.addEventListener('install', event => {
 
 // Активация Service Worker
 self.addEventListener('activate', event => {
-  console.log('[Service Worker] Активация v5...');
+  console.log('[Service Worker] Активация v4.1.3...');
   
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -104,9 +104,9 @@ self.addEventListener('fetch', event => {
           })
           .catch(error => {
             console.error('[Service Worker] Ошибка fetch:', error);
-            // Если страница не найдена, возвращаем 404.html
+            // Если страница не найдена, возвращаем index.html
             if (event.request.mode === 'navigate') {
-              return caches.match('./404.html');
+              return caches.match('./index.html');
             }
             return new Response('Ошибка сети', {
               status: 503,
