@@ -10,7 +10,6 @@
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <style>
-        /* Все стили из предыдущей версии остаются без изменений */
         * {
             -webkit-tap-highlight-color: transparent;
             -webkit-touch-callout: none;
@@ -426,7 +425,6 @@
             100% { transform: rotate(360deg); }
         }
         
-        /* Анимация появления */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -438,12 +436,10 @@
             animation: fadeIn 0.5s ease-out;
         }
         
-        /* Стиль для поля поиска в выпадающем списке */
         #invNumberSearch {
             margin-bottom: 5px;
         }
         
-        /* Индикатор загрузки базы */
         .db-loading {
             display: inline-block;
             width: 12px;
@@ -455,7 +451,6 @@
             margin-left: 5px;
         }
         
-        /* Индикатор синхронизации */
         .sync-indicator {
             display: inline-block;
             width: 12px;
@@ -483,7 +478,6 @@
             100% { opacity: 1; }
         }
         
-        /* Сообщение о синхронизации */
         .sync-message {
             background-color: #e3f2fd;
             padding: 10px;
@@ -508,7 +502,6 @@
             border-left-color: #FF9800;
         }
         
-        /* Стили для мобильных устройств */
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -521,12 +514,12 @@
             .form-group input,
             .form-group select,
             .form-group textarea {
-                font-size: 16px !important; /* Предотвращает зум в iOS */
+                font-size: 16px !important;
             }
             
             .btn {
                 padding: 14px 20px;
-                min-height: 44px; /* Минимальная высота для touch */
+                min-height: 44px;
             }
             
             .button-group {
@@ -575,17 +568,11 @@
     </style>
 </head>
 <body>
-    <!-- Проверка авторизации -->
     <div id="authCheck" style="display: none;"></div>
-    
-    <!-- Уведомление -->
     <div class="notification" id="notification"></div>
-    
-    <!-- Статус соединения -->
     <div class="connection-status" id="connectionStatus">Онлайн</div>
     
     <div class="container" id="mainContainer" style="display: none;">
-        <!-- Информация о пользователе -->
         <div class="user-info" id="userInfo" style="display: none;">
             <div class="user-info-content">
                 <span id="userName"></span>
@@ -594,16 +581,13 @@
             <button class="logout-btn" onclick="window.logout()">Выйти</button>
         </div>
         
-        <!-- Заголовок -->
         <h1 id="pageTitle">Журнал заявок на ремонт оборудования</h1>
         
-        <!-- Сообщение о недостаточных правах -->
         <div class="access-restricted" id="accessRestricted" style="display: none;">
             <strong>Доступ запрещен</strong>
             <p>У вас недостаточно прав для выполнения этого действия.</p>
         </div>
         
-        <!-- Форма для добавления новой заявки -->
         <div class="form-section" id="formSection">
             <h2>Новая заявка на ремонт</h2>
             <form id="repairForm">
@@ -673,7 +657,6 @@
             </form>
         </div>
         
-        <!-- Поиск и фильтры -->
         <div class="search-filter" id="searchFilter">
             <input type="text" id="searchInput" placeholder="Поиск по оборудованию или неисправности...">
             <select id="statusFilter">
@@ -687,7 +670,6 @@
             <input type="month" id="monthFilter" placeholder="Фильтр по месяцу">
         </div>
         
-        <!-- Заголовок таблицы -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; margin-bottom: 10px;">
             <h2>Заявки на ремонт</h2>
             <div>
@@ -696,7 +678,6 @@
             </div>
         </div>
         
-        <!-- Сводная информация перед таблицей -->
         <div class="summary" id="summarySection">
             <div class="summary-item">
                 <strong>Всего заявок:</strong> <span id="totalRequests">0</span>
@@ -712,18 +693,15 @@
             </div>
         </div>
         
-        <!-- Сообщение о синхронизации (будет отображаться при наличии ожидающих синхронизаций) -->
         <div class="sync-message" id="syncMessage" style="display: none;">
             <span id="syncMessageText"></span>
         </div>
         
-        <!-- Подсказка для скролла -->
         <div class="scroll-hint">
             <i>Используйте горизонтальную прокрутку для просмотра всех колонок таблицы</i>
             <span class="scroll-icon">↔</span>
         </div>
         
-        <!-- Таблица с заявками -->
         <div class="table-container">
             <table id="repairTable">
                 <thead>
@@ -744,25 +722,19 @@
                         <th class="col-actions">Действия</th>
                     </tr>
                 </thead>
-                <tbody id="repairTableBody">
-                    <!-- Данные будут добавляться динамически -->
-                </tbody>
+                <tbody id="repairTableBody"></tbody>
             </table>
         </div>
         
-        <!-- Модальное окно для дашборда -->
         <div id="dashboardModal" class="modal">
             <div class="modal-content">
                 <span class="close" onclick="window.closeDashboard()">&times;</span>
                 <h2>Дашборд статистики</h2>
-                <div id="dashboardContent">
-                    <!-- Содержимое дашборда будет генерироваться динамически -->
-                </div>
+                <div id="dashboardContent"></div>
             </div>
         </div>
     </div>
 
-    <!-- Экран загрузки -->
     <div id="loadingScreen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: white; display: flex; justify-content: center; align-items: center; z-index: 9999;">
         <div style="text-align: center;">
             <div style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #4CAF50; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
@@ -771,7 +743,6 @@
         </div>
     </div>
 
-    <!-- Кнопка принудительного обновления -->
     <button id="forceUpdateBtn" onclick="forceUpdate()" style="
         position: fixed;
         bottom: 20px;
@@ -797,11 +768,8 @@
                 navigator.serviceWorker.register('service-worker.js')
                     .then(function(registration) {
                         console.log('Service Worker зарегистрирован:', registration.scope);
-                        
-                        // Проверяем обновления
                         registration.update();
                         
-                        // Слушаем обновления Service Worker
                         registration.addEventListener('updatefound', () => {
                             const newWorker = registration.installing;
                             console.log('Найдено обновление Service Worker');
@@ -816,7 +784,6 @@
                             });
                         });
                         
-                        // Проверяем, есть ли ожидающий Service Worker
                         if (registration.waiting) {
                             showUpdateNotification();
                         }
@@ -833,20 +800,16 @@
             loadingStatus.textContent = 'Проверка авторизации...';
             
             setTimeout(function() {
-                // Используем правильные ключи localStorage
                 const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
                 const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
                 
                 if (!isAuthenticated || !currentUser) {
-                    // Если не авторизован, перенаправляем на страницу входа
                     loadingStatus.textContent = 'Перенаправление на страницу входа...';
                     window.location.href = 'login.html';
                 } else {
-                    // Если авторизован, показываем контент
                     document.getElementById('loadingScreen').style.display = 'none';
                     document.getElementById('mainContainer').style.display = 'block';
                     
-                    // Инициализируем приложение
                     if (typeof initApp === 'function') {
                         initApp();
                     }
@@ -862,7 +825,6 @@
             if (!syncMessage || !syncMessageText) return;
             
             try {
-                // Пытаемся получить количество ожидающих синхронизацию заявок
                 const pending = localStorage.getItem('syncPendingRequests_v4');
                 const pendingCount = pending ? JSON.parse(pending).length : 0;
                 
@@ -896,10 +858,7 @@
             }
         }
         
-        // Обновляем сообщение о синхронизации каждые 5 минут
         setInterval(updateSyncMessage, 300000);
-        
-        // Обновляем сообщение о синхронизации при загрузке
         setTimeout(updateSyncMessage, 2000);
         
         // Показать уведомление об обновлении
@@ -910,13 +869,11 @@
                 notification.className = 'notification info';
                 notification.style.display = 'block';
                 
-                // Показываем кнопку принудительного обновления
                 const forceUpdateBtn = document.getElementById('forceUpdateBtn');
                 if (forceUpdateBtn) {
                     forceUpdateBtn.style.display = 'block';
                 }
                 
-                // Добавляем кнопку обновления на 5 секунд
                 setTimeout(() => {
                     notification.style.display = 'none';
                 }, 5000);
@@ -945,7 +902,6 @@
                     }
                 }).then(() => {
                     console.log('Очистка localStorage версий...');
-                    // Удаляем все версионные ключи
                     const keysToRemove = [];
                     for (let i = 0; i < localStorage.length; i++) {
                         const key = localStorage.key(i);
@@ -958,7 +914,6 @@
                     });
                     
                     console.log('Принудительная перезагрузка...');
-                    // Принудительная перезагрузка с очисткой кэша
                     window.location.href = window.location.href + '?forceReload=' + Date.now();
                 }).catch(error => {
                     console.error('Ошибка при обновлении:', error);
@@ -976,7 +931,6 @@
         if (storedVersion !== currentVersion) {
             console.log('Обновление приложения до версии', currentVersion);
             
-            // Очищаем старые данные
             const oldKeys = [
                 'repairRequests_v3', 'equipmentDatabase_v3', 'syncPendingRequests_v3',
                 'equipmentDBLastUpdated_v3', 'requestsLastUpdated_v3', 'lastSyncTime_v3',
@@ -987,10 +941,8 @@
                 localStorage.removeItem(key);
             });
             
-            // Обновляем версию
             localStorage.setItem('app_version', currentVersion);
             
-            // Принудительно обновляем Service Worker
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.getRegistrations().then(registrations => {
                     registrations.forEach(registration => {
