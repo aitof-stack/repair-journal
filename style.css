@@ -833,3 +833,38 @@ tbody tr:hover {
         margin-bottom: 5px;
     }
 }
+
+/* Стили для кнопки синхронизации */
+.sync-btn {
+    background-color: #9C27B0;
+    color: white;
+    margin-left: 10px;
+}
+
+.sync-btn:hover {
+    background-color: #7B1FA2;
+}
+
+/* Стили для уведомления о синхронизации */
+.sync-notification {
+    background-color: #2196F3;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin: 10px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sync-notification.warning {
+    background-color: #FF9800;
+}
+
+.sync-notification.error {
+    background-color: #F44336;
+}
+
+.sync-notification.success {
+    background-color: #4CAF50;
+}
