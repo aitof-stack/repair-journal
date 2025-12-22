@@ -868,3 +868,87 @@ tbody tr:hover {
 .sync-notification.success {
     background-color: #4CAF50;
 }
+
+/* Добавить в конец файла style.css */
+
+/* Стили для кнопки синхронизации */
+.sync-btn {
+    background-color: #9C27B0;
+    color: white;
+}
+
+.sync-btn:hover {
+    background-color: #7B1FA2;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+/* Стили для мобильных устройств */
+@media (max-width: 768px) {
+    .button-group {
+        flex-direction: column;
+    }
+    
+    .button-group .btn {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    .sync-btn {
+        background-color: #9C27B0;
+        order: 3; /* Позиционирование кнопки */
+    }
+}
+
+/* Индикатор синхронизации */
+.sync-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.sync-indicator.syncing {
+    background-color: #FF9800;
+    animation: pulse 1s infinite;
+}
+
+.sync-indicator.success {
+    background-color: #4CAF50;
+}
+
+.sync-indicator.error {
+    background-color: #F44336;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Сообщение о синхронизации */
+.sync-message {
+    background-color: #e3f2fd;
+    padding: 10px;
+    border-radius: 6px;
+    margin: 10px 0;
+    border-left: 4px solid #2196F3;
+    font-size: 14px;
+}
+
+.sync-message.success {
+    background-color: #e8f5e9;
+    border-left-color: #4CAF50;
+}
+
+.sync-message.error {
+    background-color: #ffebee;
+    border-left-color: #F44336;
+}
+
+.sync-message.warning {
+    background-color: #fff3e0;
+    border-left-color: #FF9800;
+}
