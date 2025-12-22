@@ -7,8 +7,8 @@ const APP_NAME = 'Ремонтный журнал';
 
 // Конфигурация
 const GITHUB_PAGES_URL = 'https://aitof-stack.github.io/repair-journal/';
-const EQUIPMENT_DB_URL = './equipment_database.csv'; // Локальный файл
-const REPAIR_REQUESTS_URL = './data/repair_requests.json'; // Относительный путь
+const EQUIPMENT_DB_URL = './data/equipment_database.csv'; // Локальный файл
+const REPAIR_REQUESTS_URL = './repair_requests.json'; // Относительный путь
 
 // Ключи для хранения данных
 const STORAGE_KEYS = {
