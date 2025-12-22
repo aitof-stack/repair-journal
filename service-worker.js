@@ -8,7 +8,7 @@ const urlsToCache = [
   './auth.js',
   './manifest.json',
   './404.html',
-  './equipment_database.csv'
+  './data/equipment_database.csv'
 ];
 
 // Установка Service Worker
@@ -59,7 +59,7 @@ self.addEventListener('fetch', event => {
   
   // Для динамических данных используем Network First стратегию
   if (event.request.url.includes('repair_requests.json') || 
-      event.request.url.includes('equipment_database.csv')) {
+      event.request.url.includes('data/equipment_database.csv')) {
     event.respondWith(
       fetch(event.request)
         .then(response => {
