@@ -1,13 +1,17 @@
-// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ 4.1.4
-// УПРОЩЕННАЯ ВЕРСИЯ ДЛЯ СТАБИЛЬНОЙ РАБОТЫ
+// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ 4.2.0
+// С РАБОЧЕЙ СИНХРОНИЗАЦИЕЙ И ПОИСКОМ
 
 // Константы
-const APP_VERSION = '4.1.4';
+const APP_VERSION = '4.2.0';
 const APP_NAME = 'Ремонтный журнал';
 
 // Настройки GitHub Gist
 const GIST_ID = 'd356b02c2c182270935739995790fc20';
 const GIST_FILENAME = 'repair_requests.json';
+
+// URL для работы с Gist API
+const GIST_API_URL = `https://api.github.com/gists/${GIST_ID}`;
+const GIST_RAW_URL = `https://gist.githubusercontent.com/aitof-stack/${GIST_ID}/raw/${GIST_FILENAME}`;
 
 // Ключи для хранения данных
 const STORAGE_KEYS = {
@@ -20,7 +24,8 @@ const STORAGE_KEYS = {
   LAST_SYNC_TIME: 'lastSyncTime_v4',
   SYNC_PENDING: 'syncPendingRequests_v4',
   DEVICE_ID: 'deviceId_v4',
-  GITHUB_TOKEN: 'github_token_secure'
+  GITHUB_TOKEN: 'github_token_secure',
+  SEARCH_CACHE: 'searchCache_v4'
 };
 
 // Переменные приложения
@@ -28,12 +33,17 @@ let equipmentDatabase = [];
 let repairRequests = [];
 let currentUser = null;
 let isOnline = navigator.onLine;
+let syncInProgress = false;
+let pendingSyncRequests = [];
+let deviceId = null;
+let githubToken = '';
 
 // DOM элементы
 let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
 let machineNumberInput, authorInput, clearBtn, repairTableBody;
 let searchInput, statusFilter, locationFilter, monthFilter;
 let totalRequestsElement, pendingRequestsElement, completedRequestsElement, totalDowntimeElement;
+let invNumberSearchInput;
 
 // ============ ОСНОВНАЯ ИНИЦИАЛИЗАЦИЯ ============
 
@@ -41,8 +51,17 @@ let totalRequestsElement, pendingRequestsElement, completedRequestsElement, tota
 document.addEventListener('DOMContentLoaded', function() {
   console.log(`${APP_NAME} v${APP_VERSION} запускается...`);
   
+  // Генерируем ID устройства
+  deviceId = generateDeviceId();
+  
   // Проверяем соединение
   checkConnection();
+  
+  // Загружаем токен
+  loadGitHubToken();
+  
+  // Загружаем ожидающие синхронизацию заявки
+  loadPendingSyncRequests();
   
   // Инициализируем интерфейс
   initInterface();
@@ -50,6 +69,51 @@ document.addEventListener('DOMContentLoaded', function() {
   // Проверяем авторизацию
   checkAuthAndLoad();
 });
+
+// Генерация ID устройства
+function generateDeviceId() {
+  let id = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+  if (!id) {
+    id = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem(STORAGE_KEYS.DEVICE_ID, id);
+  }
+  return id;
+}
+
+// Загрузка GitHub токена
+function loadGitHubToken() {
+  try {
+    githubToken = localStorage.getItem(STORAGE_KEYS.GITHUB_TOKEN) || '';
+    if (githubToken) {
+      console.log('GitHub Token загружен');
+    }
+  } catch (error) {
+    console.error('Ошибка загрузки токена:', error);
+  }
+}
+
+// Загрузить ожидающие синхронизацию заявки
+function loadPendingSyncRequests() {
+  try {
+    const pending = localStorage.getItem(STORAGE_KEYS.SYNC_PENDING);
+    if (pending) {
+      pendingSyncRequests = JSON.parse(pending) || [];
+      console.log('Загружены ожидающие синхронизацию заявки:', pendingSyncRequests.length);
+    }
+  } catch (error) {
+    console.error('Ошибка загрузки ожидающих заявок:', error);
+    pendingSyncRequests = [];
+  }
+}
+
+// Сохранить ожидающие синхронизацию заявки
+function savePendingSyncRequests() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.SYNC_PENDING, JSON.stringify(pendingSyncRequests));
+  } catch (error) {
+    console.error('Ошибка сохранения ожидающих заявок:', error);
+  }
+}
 
 // Инициализация интерфейса
 function initInterface() {
@@ -71,6 +135,9 @@ function initInterface() {
     
     // Добавляем обработчики событий
     addEventListeners();
+    
+    // Настраиваем поиск в селекте
+    setupSearchableSelect();
     
     console.log('Интерфейс инициализирован');
   } catch (error) {
@@ -98,6 +165,7 @@ function initDOMElements() {
     pendingRequestsElement = document.getElementById('pendingRequests');
     completedRequestsElement = document.getElementById('completedRequests');
     totalDowntimeElement = document.getElementById('totalDowntime');
+    invNumberSearchInput = document.getElementById('invNumberSearch');
   } catch (error) {
     console.error('Ошибка получения DOM элементов:', error);
   }
@@ -207,6 +275,16 @@ async function loadAllData() {
     // Обновляем интерфейс
     applyFilters();
     updateSummary();
+    updateSyncMessage();
+    
+    // Автоматическая синхронизация если онлайн и есть токен
+    if (isOnline && githubToken) {
+      setTimeout(() => {
+        syncAllData().catch(error => {
+          console.log('Автоматическая синхронизация не удалась:', error.message);
+        });
+      }, 2000);
+    }
     
     // Скрываем уведомление о загрузке
     setTimeout(() => {
@@ -225,18 +303,47 @@ async function loadAllData() {
 }
 
 // Загрузка базы оборудования
-async function loadEquipmentDatabase() {
+async function loadEquipmentDatabase(forceUpdate = false) {
   try {
     console.log('Загрузка базы оборудования...');
     
-    // Пробуем загрузить из localStorage
+    const lastUpdated = localStorage.getItem(STORAGE_KEYS.DB_LAST_UPDATED);
     const savedData = localStorage.getItem(STORAGE_KEYS.EQUIPMENT_DB);
     
-    if (savedData) {
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+    
+    const shouldUpdate = forceUpdate || 
+                        !lastUpdated || 
+                        new Date(lastUpdated) < oneDayAgo ||
+                        !savedData;
+    
+    if (shouldUpdate && isOnline) {
+      // Пробуем загрузить с сервера
+      const response = await fetch('data/equipment_database.csv?t=' + Date.now());
+      
+      if (response.ok) {
+        const csvContent = await response.text();
+        equipmentDatabase = parseCSV(csvContent);
+        
+        if (equipmentDatabase.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.EQUIPMENT_DB, JSON.stringify(equipmentDatabase));
+          localStorage.setItem(STORAGE_KEYS.DB_LAST_UPDATED, new Date().toISOString());
+          console.log('Загружена база с сервера:', equipmentDatabase.length, 'записей');
+          
+          if (!forceUpdate) {
+            showNotification(`База оборудования обновлена (${equipmentDatabase.length} записей)`, 'success');
+          }
+        } else {
+          throw new Error('Пустая база с сервера');
+        }
+      } else {
+        throw new Error('Ошибка загрузки с сервера');
+      }
+    } else if (savedData) {
       equipmentDatabase = JSON.parse(savedData);
       console.log('Загружена локальная база оборудования:', equipmentDatabase.length, 'записей');
     } else {
-      // Если нет локальной базы, используем стандартную
       equipmentDatabase = getDefaultEquipmentDatabase();
       localStorage.setItem(STORAGE_KEYS.EQUIPMENT_DB, JSON.stringify(equipmentDatabase));
       console.log('Создана база по умолчанию:', equipmentDatabase.length, 'записей');
@@ -251,10 +358,89 @@ async function loadEquipmentDatabase() {
     
   } catch (error) {
     console.error('Ошибка загрузки базы оборудования:', error);
-    equipmentDatabase = getDefaultEquipmentDatabase();
+    
+    const savedData = localStorage.getItem(STORAGE_KEYS.EQUIPMENT_DB);
+    if (savedData) {
+      equipmentDatabase = JSON.parse(savedData);
+      console.log('Используем сохраненную базу после ошибки');
+    } else {
+      equipmentDatabase = getDefaultEquipmentDatabase();
+      console.log('Используем базу по умолчанию');
+    }
+    
     populateInvNumberSelect();
+    updateDBButtonInfo();
+    
+    if (forceUpdate) {
+      showNotification('Ошибка обновления базы. Используется локальная версия.', 'warning');
+    }
+    
     return false;
   }
+}
+
+// Парсинг CSV
+function parseCSV(csvContent) {
+  const equipment = [];
+  const lines = csvContent.split('\n');
+  
+  console.log('Общее количество строк CSV:', lines.length);
+  
+  const firstLine = lines[0] || '';
+  let delimiter = ';';
+  
+  if (firstLine.includes(';')) {
+    delimiter = ';';
+  } else if (firstLine.includes(',')) {
+    delimiter = ',';
+  } else if (firstLine.includes('\t')) {
+    delimiter = '\t';
+  }
+  
+  let startIndex = 0;
+  if (lines[0] && (
+    lines[0].toLowerCase().includes('участок') ||
+    lines[0].toLowerCase().includes('инв') ||
+    lines[0].toLowerCase().includes('наименование')
+  )) {
+    startIndex = 1;
+  }
+  
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    if (!line || line === ';' || line === ',') continue;
+    
+    try {
+      const parts = line.split(delimiter).map(part => {
+        let clean = part.trim();
+        if (clean.startsWith('"') && clean.endsWith('"')) {
+          clean = clean.substring(1, clean.length - 1);
+        }
+        return clean;
+      });
+      
+      if (parts.length >= 3) {
+        const item = {
+          location: parts[0] || '',
+          invNumber: parts[1] || '',
+          name: parts[2] || '',
+          model: parts.length > 3 ? parts[3] : '-',
+          machineNumber: parts.length > 4 ? parts[4] : '-'
+        };
+        
+        if (item.invNumber && item.name) {
+          equipment.push(item);
+        }
+      }
+    } catch (error) {
+      console.warn(`Ошибка парсинга строки ${i + 1}:`, error);
+      continue;
+    }
+  }
+  
+  console.log('Успешно распарсено записей:', equipment.length);
+  return equipment;
 }
 
 // База оборудования по умолчанию
@@ -276,15 +462,40 @@ async function loadRepairRequests() {
   try {
     console.log('Загрузка заявок...');
     
+    // Сначала загружаем локальные
     const savedRequests = localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS);
+    let localRequests = [];
     
     if (savedRequests) {
-      repairRequests = JSON.parse(savedRequests);
-      console.log('Загружено заявок:', repairRequests.length);
-    } else {
-      repairRequests = [];
-      console.log('Нет сохраненных заявок');
+      localRequests = JSON.parse(savedRequests);
+      console.log('Локальных заявок:', localRequests.length);
     }
+    
+    // Пробуем загрузить с сервера если онлайн
+    let serverRequests = [];
+    if (isOnline) {
+      try {
+        const response = await fetch(`${GIST_RAW_URL}?t=${Date.now()}`);
+        if (response.ok) {
+          serverRequests = await response.json();
+          console.log('Заявок с сервера:', serverRequests.length);
+          
+          // Фильтруем удаленные
+          serverRequests = serverRequests.filter(item => !item.deleted);
+        }
+      } catch (error) {
+        console.log('Не удалось загрузить с сервера:', error.message);
+      }
+    }
+    
+    // Объединяем данные
+    repairRequests = mergeRequests(localRequests, serverRequests);
+    
+    // Сохраняем объединенные данные
+    localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+    localStorage.setItem(STORAGE_KEYS.REQUESTS_LAST_UPDATED, new Date().toISOString());
+    
+    console.log('Всего заявок после объединения:', repairRequests.length);
     
     // Обновляем таблицу
     renderRepairTable();
@@ -293,10 +504,69 @@ async function loadRepairRequests() {
     
   } catch (error) {
     console.error('Ошибка загрузки заявок:', error);
-    repairRequests = [];
+    
+    const savedRequests = localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS);
+    if (savedRequests) {
+      repairRequests = JSON.parse(savedRequests);
+      console.log('Используем локальные заявки после ошибки');
+    } else {
+      repairRequests = [];
+    }
+    
     renderRepairTable();
     return false;
   }
+}
+
+// Объединение заявок
+function mergeRequests(localRequests, serverRequests) {
+  const requestMap = new Map();
+  
+  // Сначала добавляем серверные
+  serverRequests.forEach(request => {
+    if (request.id && !request.deleted) {
+      requestMap.set(request.id, request);
+    }
+  });
+  
+  // Затем добавляем локальные (перезаписываем если новее)
+  localRequests.forEach(request => {
+    if (!request.id || request.deleted) return;
+    
+    const existing = requestMap.get(request.id);
+    
+    if (!existing) {
+      requestMap.set(request.id, request);
+    } else {
+      const localTime = new Date(request.updatedAt || request.createdAt || 0);
+      const serverTime = new Date(existing.updatedAt || existing.createdAt || 0);
+      
+      if (localTime > serverTime) {
+        requestMap.set(request.id, request);
+      }
+    }
+  });
+  
+  // Добавляем ожидающие синхронизацию
+  pendingSyncRequests.forEach(pending => {
+    if (pending.deleted) {
+      requestMap.delete(pending.id);
+    } else if (pending.id) {
+      const existing = requestMap.get(pending.id);
+      if (!existing) {
+        requestMap.set(pending.id, pending);
+      } else {
+        const pendingTime = new Date(pending.updatedAt || pending.createdAt || 0);
+        const existingTime = new Date(existing.updatedAt || existing.createdAt || 0);
+        
+        if (pendingTime > existingTime) {
+          requestMap.set(pending.id, pending);
+        }
+      }
+    }
+  });
+  
+  return Array.from(requestMap.values());
 }
 
 // ============ ИНТЕРФЕЙСНЫЕ ФУНКЦИИ ============
@@ -326,6 +596,16 @@ function addEventListeners() {
       isOnline = true;
       showNotification('Соединение восстановлено', 'success');
       checkConnection();
+      updateSyncMessage();
+      
+      // Автоматическая синхронизация при появлении интернета
+      if (pendingSyncRequests.length > 0 && githubToken) {
+        setTimeout(() => {
+          syncAllData().catch(() => {
+            console.log('Автоматическая синхронизация не удалась');
+          });
+        }, 2000);
+      }
     });
     
     window.addEventListener('offline', () => {
@@ -333,6 +613,7 @@ function addEventListeners() {
       isOnline = false;
       showNotification('Потеряно соединение с интернетом', 'warning');
       checkConnection();
+      updateSyncMessage();
     });
     
     console.log('Обработчики событий добавлены');
@@ -347,8 +628,11 @@ function updateDBButtonInfo() {
     const updateBtn = document.querySelector('.btn-load');
     if (!updateBtn) return;
     
+    const lastUpdated = localStorage.getItem(STORAGE_KEYS.DB_LAST_UPDATED);
+    
     if (equipmentDatabase && equipmentDatabase.length > 0) {
-      updateBtn.title = `База оборудования: ${equipmentDatabase.length} записей`;
+      const date = lastUpdated ? new Date(lastUpdated).toLocaleDateString('ru-RU') : 'неизвестно';
+      updateBtn.title = `База оборудования: ${equipmentDatabase.length} записей (обновлено: ${date})`;
       updateBtn.textContent = `🔄 База: ${equipmentDatabase.length} записей`;
     } else {
       updateBtn.title = 'База оборудования не загружена';
@@ -373,6 +657,14 @@ function populateInvNumberSelect() {
       option.textContent = "База оборудования пуста...";
       option.disabled = true;
       invNumberSelect.appendChild(option);
+      
+      if (isOnline) {
+        const updateOption = document.createElement('option');
+        updateOption.value = "";
+        updateOption.textContent = "Нажмите 'Обновить базу'";
+        updateOption.disabled = true;
+        invNumberSelect.appendChild(updateOption);
+      }
       return;
     }
     
@@ -454,6 +746,83 @@ function populateLocationFilter() {
     }
   } catch (error) {
     console.error('Ошибка заполнения фильтра участков:', error);
+  }
+}
+
+// Настройка поиска в выпадающем списке
+function setupSearchableSelect() {
+  const invNumberSearch = document.getElementById('invNumberSearch');
+  const invNumberSelect = document.getElementById('invNumber');
+  
+  if (invNumberSearch && invNumberSelect) {
+    invNumberSearch.addEventListener('input', function() {
+      const searchTerm = this.value.toLowerCase();
+      const options = invNumberSelect.options;
+      
+      let firstVisibleIndex = -1;
+      
+      for (let i = 0; i < options.length; i++) {
+        const option = options[i];
+        const text = option.textContent.toLowerCase();
+        
+        if (text.includes(searchTerm)) {
+          option.style.display = '';
+          if (firstVisibleIndex === -1) {
+            firstVisibleIndex = i;
+          }
+        } else {
+          option.style.display = 'none';
+        }
+      }
+      
+      // Выбираем первый видимый элемент
+      if (firstVisibleIndex !== -1) {
+        invNumberSelect.selectedIndex = firstVisibleIndex;
+        handleInvNumberChange.call(invNumberSelect);
+      }
+    });
+    
+    // Добавляем кнопку очистки поиска
+    const searchContainer = invNumberSearch.parentElement;
+    searchContainer.style.position = 'relative';
+    
+    const clearSearchBtn = document.createElement('button');
+    clearSearchBtn.innerHTML = '×';
+    clearSearchBtn.style.cssText = `
+      position: absolute;
+      right: 5px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #999;
+      display: none;
+      z-index: 10;
+      min-height: 20px;
+      min-width: 20px;
+    `;
+    
+    clearSearchBtn.addEventListener('click', function() {
+      invNumberSearch.value = '';
+      
+      const options = invNumberSelect.options;
+      for (let i = 0; i < options.length; i++) {
+        options[i].style.display = '';
+      }
+      
+      invNumberSelect.selectedIndex = 0;
+      handleInvNumberChange.call(invNumberSelect);
+      
+      this.style.display = 'none';
+    });
+    
+    invNumberSearch.addEventListener('input', function() {
+      clearSearchBtn.style.display = this.value ? 'block' : 'none';
+    });
+    
+    searchContainer.appendChild(clearSearchBtn);
   }
 }
 
@@ -563,6 +932,7 @@ function createRequestFromForm() {
     productionItem: document.getElementById('productionItem')?.value || '-',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    syncDeviceId: deviceId,
     createdBy: currentUser.name
   };
 }
@@ -571,6 +941,21 @@ function createRequestFromForm() {
 async function addRepairRequest(request) {
   repairRequests.push(request);
   localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+  
+  pendingSyncRequests.push(request);
+  savePendingSyncRequests();
+  
+  updateSyncMessage();
+  
+  if (isOnline && githubToken) {
+    setTimeout(() => {
+      syncAllData().catch(() => {
+        console.log('Фоновая синхронизация не удалась');
+      });
+    }, 1000);
+  } else {
+    showNotification('Заявка сохранена локально. Синхронизируйте при появлении интернета.', 'warning');
+  }
   
   return request;
 }
@@ -610,6 +995,11 @@ function clearForm() {
     if (invSelect) {
       invSelect.selectedIndex = 0;
       handleInvNumberChange.call(invSelect);
+    }
+    
+    const invNumberSearch = document.getElementById('invNumberSearch');
+    if (invNumberSearch) {
+      invNumberSearch.value = '';
     }
   } catch (error) {
     console.error('Ошибка очистки формы:', error);
@@ -659,7 +1049,16 @@ function renderRepairTable(filteredRequests = null) {
         endDateTimeDisplay = 'Завершено';
       }
       
-      const downtimeHours = request.downtimeHours || 0;
+      let downtimeHours = request.downtimeHours || 0;
+      if (request.status === 'completed' && request.repairEndDate && request.repairEndTime) {
+        downtimeHours = calculateDowntimeHours(
+          request.date, 
+          request.time, 
+          request.repairEndDate, 
+          request.repairEndTime
+        );
+      }
+      
       const statusText = request.status === 'pending' ? 'В ремонте' : 'Завершено';
       const statusClass = request.status === 'pending' ? 'status-pending' : 'status-completed';
       
@@ -805,6 +1204,331 @@ function updateSummary(requests = null) {
   }
 }
 
+// ============ СИНХРОНИЗАЦИЯ ============
+
+// Синхронизация всех данных
+async function syncAllData() {
+  if (syncInProgress) {
+    showNotification('Синхронизация уже выполняется...', 'warning');
+    return;
+  }
+  
+  // Проверяем наличие токена
+  if (!githubToken) {
+    showNotification('Для синхронизации требуется GitHub Token', 'warning');
+    
+    if (confirm('Хотите настроить GitHub Token для синхронизации?')) {
+      await setupGitHubToken();
+    }
+    return;
+  }
+  
+  syncInProgress = true;
+  showNotification('Начата синхронизация данных...', 'info');
+  
+  try {
+    // 1. Отправляем ожидающие заявки
+    if (pendingSyncRequests.length > 0 && isOnline) {
+      const sentCount = await sendPendingRequestsToServer();
+      if (sentCount > 0) {
+        showNotification(`Отправлено ${sentCount} заявок на сервер`, 'success');
+      }
+    }
+    
+    // 2. Загружаем заявки с сервера
+    if (isOnline) {
+      await loadRepairRequestsFromServer();
+    }
+    
+    // 3. Объединяем с локальными данными
+    await mergeAndSaveRequests();
+    
+    // 4. Обновляем базу оборудования
+    if (isOnline) {
+      await loadEquipmentDatabase(true);
+    }
+    
+    // 5. Показываем результат
+    showNotification('Синхронизация завершена!', 'success');
+    
+    // 6. Обновляем интерфейс
+    renderRepairTable();
+    updateSummary();
+    updateDBButtonInfo();
+    
+    // 7. Сохраняем время последней синхронизации
+    localStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, new Date().toISOString());
+    
+  } catch (error) {
+    console.error('Ошибка синхронизации:', error);
+    
+    if (error.message.includes('401') || error.message.includes('403')) {
+      showNotification('Ошибка авторизации. Токен недействителен.', 'error');
+      localStorage.removeItem(STORAGE_KEYS.GITHUB_TOKEN);
+      githubToken = '';
+    } else if (error.message.includes('Network')) {
+      showNotification('Ошибка сети. Проверьте подключение к интернету.', 'error');
+    } else {
+      showNotification('Ошибка синхронизации: ' + error.message, 'error');
+    }
+  } finally {
+    syncInProgress = false;
+    updateSyncMessage();
+  }
+}
+
+// Отправить ожидающие заявки на сервер
+async function sendPendingRequestsToServer() {
+  if (pendingSyncRequests.length === 0) {
+    console.log('Нет заявок для отправки');
+    return 0;
+  }
+  
+  console.log(`Отправка ${pendingSyncRequests.length} заявок на сервер...`);
+  
+  try {
+    // Сначала загружаем текущие данные
+    const response = await fetch(`${GIST_RAW_URL}?t=${Date.now()}`);
+    let currentRequests = [];
+    
+    if (response.ok) {
+      currentRequests = await response.json();
+      console.log('Текущих заявок в Gist:', currentRequests.length);
+    }
+    
+    // Фильтруем удаленные
+    currentRequests = currentRequests.filter(item => !item.deleted);
+    
+    // Объединяем данные
+    let changesMade = false;
+    
+    pendingSyncRequests.forEach(newRequest => {
+      if (newRequest.deleted) {
+        // Удаляем заявку
+        const index = currentRequests.findIndex(r => r.id === newRequest.id);
+        if (index !== -1) {
+          currentRequests.splice(index, 1);
+          changesMade = true;
+          console.log('Заявка удалена:', newRequest.id);
+        }
+      } else {
+        // Добавляем или обновляем заявку
+        const existingIndex = currentRequests.findIndex(r => r.id === newRequest.id);
+        if (existingIndex !== -1) {
+          // Обновляем существующую
+          currentRequests[existingIndex] = newRequest;
+          changesMade = true;
+          console.log('Заявка обновлена:', newRequest.id);
+        } else {
+          // Добавляем новую
+          currentRequests.push(newRequest);
+          changesMade = true;
+          console.log('Заявка добавлена:', newRequest.id);
+        }
+      }
+    });
+    
+    // Сохраняем обратно
+    if (changesMade) {
+      const updateResponse = await fetch(GIST_API_URL, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `token ${githubToken}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.github.v3+json'
+        },
+        body: JSON.stringify({
+          description: `Ремонтный журнал - обновлено ${new Date().toLocaleDateString('ru-RU')}`,
+          files: {
+            [GIST_FILENAME]: {
+              content: JSON.stringify(currentRequests, null, 2)
+            }
+          }
+        })
+      });
+      
+      if (!updateResponse.ok) {
+        throw new Error(`Ошибка обновления Gist: ${updateResponse.status}`);
+      }
+      
+      // Очищаем ожидающие заявки
+      const sentCount = pendingSyncRequests.length;
+      pendingSyncRequests = [];
+      savePendingSyncRequests();
+      
+      console.log('Заявки успешно сохранены в Gist:', sentCount);
+      return sentCount;
+    }
+    
+    return 0;
+    
+  } catch (error) {
+    console.error('Ошибка отправки заявок на сервер:', error);
+    throw error;
+  }
+}
+
+// Загрузить заявки с сервера
+async function loadRepairRequestsFromServer() {
+  try {
+    console.log('Загрузка заявок с сервера...');
+    
+    const response = await fetch(`${GIST_RAW_URL}?t=${Date.now()}`);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return [];
+      }
+      throw new Error(`Ошибка загрузки: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Загружено заявок с сервера:', data.length);
+    
+    return Array.isArray(data) ? data.filter(item => !item.deleted) : [];
+    
+  } catch (error) {
+    console.error('Ошибка загрузки заявок с сервера:', error);
+    return [];
+  }
+}
+
+// Объединить и сохранить заявки
+async function mergeAndSaveRequests() {
+  try {
+    const serverRequests = await loadRepairRequestsFromServer();
+    const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
+    
+    console.log('Объединение данных: локальных -', localRequests.length, ', серверных -', serverRequests.length);
+    
+    // Простое объединение - берем все серверные и добавляем локальные без дубликатов
+    const requestMap = new Map();
+    
+    // Сначала серверные
+    serverRequests.forEach(request => {
+      if (request.id) {
+        requestMap.set(request.id, request);
+      }
+    });
+    
+    // Затем локальные (только если нет на сервере)
+    localRequests.forEach(request => {
+      if (!request.id || request.deleted) return;
+      
+      if (!requestMap.has(request.id)) {
+        requestMap.set(request.id, request);
+      }
+    });
+    
+    // Добавляем ожидающие синхронизацию (самые свежие)
+    pendingSyncRequests.forEach(pending => {
+      if (pending.deleted) {
+        requestMap.delete(pending.id);
+      } else if (pending.id) {
+        requestMap.set(pending.id, pending);
+      }
+    });
+    
+    const mergedRequests = Array.from(requestMap.values());
+    
+    repairRequests = mergedRequests;
+    localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(mergedRequests));
+    localStorage.setItem(STORAGE_KEYS.REQUESTS_LAST_UPDATED, new Date().toISOString());
+    
+    console.log('Данные объединены. Итоговое количество:', mergedRequests.length);
+    
+    return mergedRequests;
+    
+  } catch (error) {
+    console.error('Ошибка объединения заявок:', error);
+    throw error;
+  }
+}
+
+// Настройка GitHub Token
+async function setupGitHubToken() {
+  const token = prompt('Введите ваш GitHub Token (ghp_...):');
+  
+  if (!token) {
+    showNotification('Токен не введен', 'warning');
+    return;
+  }
+  
+  if (!token.startsWith('ghp_')) {
+    showNotification('Токен должен начинаться с ghp_', 'error');
+    return;
+  }
+  
+  try {
+    // Простая проверка токена
+    const response = await fetch('https://api.github.com/user', {
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+    
+    if (response.ok) {
+      localStorage.setItem(STORAGE_KEYS.GITHUB_TOKEN, token);
+      githubToken = token;
+      showNotification('Токен успешно сохранен!', 'success');
+      
+      // Пробуем синхронизацию
+      syncAllData();
+    } else {
+      showNotification('Неверный токен', 'error');
+    }
+  } catch (error) {
+    console.error('Ошибка проверки токена:', error);
+    showNotification('Ошибка проверки токена. Попробуйте позже.', 'error');
+  }
+}
+
+// Обновить сообщение о синхронизации
+function updateSyncMessage() {
+  const syncMessage = document.getElementById('syncMessage');
+  const syncMessageText = document.getElementById('syncMessageText');
+  
+  if (!syncMessage || !syncMessageText) return;
+  
+  try {
+    if (!githubToken) {
+      syncMessageText.textContent = '⚠️ Для синхронизации требуется GitHub Token. Нажмите "🔄 Синхронизация" для настройки.';
+      syncMessage.className = 'sync-message warning';
+      syncMessage.style.display = 'block';
+      return;
+    }
+    
+    if (pendingSyncRequests.length > 0) {
+      syncMessageText.textContent = `⚠️ У вас есть ${pendingSyncRequests.length} заявок, ожидающих синхронизации. Нажмите кнопку "🔄 Синхронизация" для отправки на сервер.`;
+      syncMessage.className = 'sync-message warning';
+      syncMessage.style.display = 'block';
+    } else {
+      const lastSync = localStorage.getItem(STORAGE_KEYS.LAST_SYNC_TIME);
+      if (lastSync) {
+        const lastSyncDate = new Date(lastSync);
+        const now = new Date();
+        const diffHours = Math.floor((now - lastSyncDate) / (1000 * 60 * 60));
+        
+        if (diffHours > 24) {
+          syncMessageText.textContent = `🔄 Последняя синхронизация была ${diffHours} часов назад. Рекомендуется выполнить синхронизацию.`;
+          syncMessage.className = 'sync-message';
+          syncMessage.style.display = 'block';
+        } else {
+          syncMessage.style.display = 'none';
+        }
+      } else {
+        syncMessageText.textContent = '🔄 Данные еще не синхронизировались. Нажмите кнопку "🔄 Синхронизация" для первой синхронизации.';
+        syncMessage.className = 'sync-message';
+        syncMessage.style.display = 'block';
+      }
+    }
+  } catch (error) {
+    console.error('Ошибка при обновлении сообщения синхронизации:', error);
+    syncMessage.style.display = 'none';
+  }
+}
+
 // ============ ОСНОВНЫЕ ФУНКЦИИ ============
 
 // Проверка соединения
@@ -868,9 +1592,7 @@ window.updateEquipmentDB = async function() {
       updateBtn.style.opacity = '0.7';
     }
     
-    // Здесь можно добавить загрузку с сервера
-    // Для простоты просто перезагружаем локальную базу
-    await loadEquipmentDatabase();
+    await loadEquipmentDatabase(true);
     
     showNotification(`База обновлена! Загружено ${equipmentDatabase.length} записей`, 'success');
     
@@ -983,13 +1705,40 @@ window.deleteRequest = async function(id) {
   }
   
   try {
+    const request = repairRequests.find(req => req.id === id);
+    if (!request) {
+      showNotification('Заявка не найдена', 'error');
+      return;
+    }
+    
+    const deleteRequest = {
+      ...request,
+      deleted: true,
+      deletedAt: new Date().toISOString(),
+      deletedBy: currentUser.name,
+      updatedAt: new Date().toISOString(),
+      syncDeviceId: deviceId
+    };
+    
+    pendingSyncRequests.push(deleteRequest);
+    savePendingSyncRequests();
+    
     repairRequests = repairRequests.filter(req => req.id !== id);
     localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
     
     renderRepairTable();
     updateSummary();
     
-    showNotification('Заявка удалена', 'success');
+    showNotification('Заявка помечена для удаления', 'success');
+    updateSyncMessage();
+    
+    if (isOnline && githubToken) {
+      setTimeout(() => {
+        syncAllData().catch(() => {
+          console.log('Фоновая синхронизация не удалась');
+        });
+      }, 1000);
+    }
     
   } catch (error) {
     console.error('Ошибка при удалении заявки:', error);
@@ -1049,7 +1798,8 @@ window.completeRequest = async function(id) {
       downtimeCount: parseInt(downtimeCount) || 1,
       downtimeHours: downtimeHours,
       updatedAt: new Date().toISOString(),
-      completedBy: currentUser.name
+      completedBy: currentUser.name,
+      syncDeviceId: deviceId
     };
     
     const index = repairRequests.findIndex(req => req.id === id);
@@ -1058,8 +1808,22 @@ window.completeRequest = async function(id) {
     }
     localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
     
-    showNotification('Ремонт завершен! Изменения сохранены.', 'success');
+    pendingSyncRequests.push(updatedRequest);
+    savePendingSyncRequests();
     
+    if (!isOnline || !githubToken) {
+      showNotification('Изменение сохранено локально. Синхронизируйте при появлении интернета.', 'warning');
+    } else {
+      showNotification('Ремонт завершен! Изменения сохранены.', 'success');
+      
+      setTimeout(() => {
+        syncAllData().catch(() => {
+          console.log('Фоновая синхронизация не удалась');
+        });
+      }, 1000);
+    }
+    
+    updateSyncMessage();
     renderRepairTable();
     updateSummary();
     
@@ -1070,9 +1834,7 @@ window.completeRequest = async function(id) {
 };
 
 // Синхронизация всех данных
-window.syncAllData = async function() {
-  showNotification('Синхронизация временно отключена', 'warning');
-};
+window.syncAllData = syncAllData;
 
 // ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
 
@@ -1159,6 +1921,21 @@ function generateDashboardHTML() {
       ? (totalDowntime / completedRequests).toFixed(1) 
       : '0.0';
     
+    const pendingPercent = totalRequests > 0 
+      ? ((pendingRequests / totalRequests) * 100).toFixed(1) 
+      : '0.0';
+    
+    const completedPercent = totalRequests > 0 
+      ? ((completedRequests / totalRequests) * 100).toFixed(1) 
+      : '0.0';
+    
+    const lastSyncTime = localStorage.getItem(STORAGE_KEYS.LAST_SYNC_TIME);
+    const lastSync = lastSyncTime ? new Date(lastSyncTime).toLocaleString('ru-RU') : 'никогда';
+    const dbLastUpdated = localStorage.getItem(STORAGE_KEYS.DB_LAST_UPDATED);
+    const dbDate = dbLastUpdated ? new Date(dbLastUpdated).toLocaleDateString('ru-RU') : 'неизвестно';
+    const tokenStatus = githubToken ? 'Настроен' : 'Не настроен';
+    const tokenPreview = githubToken ? '••••••••' + githubToken.slice(-4) : 'Не указан';
+    
     return `
       <div class="dashboard-stats">
         <div class="stat-card">
@@ -1170,13 +1947,13 @@ function generateDashboardHTML() {
         <div class="stat-card">
           <h3>В работе</h3>
           <div class="stat-value">${pendingRequests}</div>
-          <div class="stat-change">${totalRequests > 0 ? ((pendingRequests / totalRequests) * 100).toFixed(1) : 0}% от общего</div>
+          <div class="stat-change">${pendingPercent}% от общего</div>
         </div>
         
         <div class="stat-card">
           <h3>Завершено</h3>
           <div class="stat-value">${completedRequests}</div>
-          <div class="stat-change">${totalRequests > 0 ? ((completedRequests / totalRequests) * 100).toFixed(1) : 0}% от общего</div>
+          <div class="stat-change">${completedPercent}% от общего</div>
         </div>
         
         <div class="stat-card">
@@ -1187,43 +1964,62 @@ function generateDashboardHTML() {
       </div>
       
       <div style="margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
-        <h3 style="color: #4CAF50; margin-top: 0;">Информация о системе</h3>
+        <h3 style="color: #4CAF50; margin-top: 0;">Статус синхронизации</h3>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
           <div><strong>Статус:</strong> <span style="color: ${isOnline ? '#4CAF50' : '#F44336'}">${isOnline ? 'Онлайн' : 'Оффлайн'}</span></div>
-          <div><strong>База оборудования:</strong> ${equipmentDatabase.length} записей</div>
-          <div><strong>Пользователь:</strong> ${currentUser.name} (${getRoleName(currentUser.type)})</div>
-          <div><strong>Версия приложения:</strong> ${APP_VERSION}</div>
+          <div><strong>GitHub Token:</strong> <span style="color: ${githubToken ? '#4CAF50' : '#F44336'}">${tokenStatus}</span> (${tokenPreview})</div>
+          <div><strong>Последняя синхронизация:</strong> ${lastSync}</div>
+          <div><strong>Ожидают синхронизации:</strong> <span style="color: ${pendingSyncRequests.length > 0 ? '#FF9800' : '#4CAF50'}">${pendingSyncRequests.length} заявок</span></div>
+          <div><strong>База оборудования:</strong> ${equipmentDatabase.length} записей (${dbDate})</div>
+          <div><strong>Устройство:</strong> ${deviceId.substring(0, 15)}...</div>
         </div>
       </div>
       
-      <div style="margin-top: 30px; text-align: center;">
-        <button onclick="window.exportRepairData()" style="
-          background-color: #FF9800;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 16px;
-          margin: 10px;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-        ">📥 Экспорт заявок</button>
-        
-        <button onclick="window.updateEquipmentDB()" style="
-          background-color: #2196F3;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 16px;
-          margin: 10px;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-        ">🔄 Обновить базу</button>
+      <div style="margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
+        <h3 style="color: #4CAF50; margin-top: 0;">Действия</h3>
+        <div style="text-align: center;">
+          <button onclick="window.syncAllData()" style="
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+          ">🔄 Синхронизировать все данные</button>
+          
+          <button onclick="window.updateEquipmentDB()" style="
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+          ">🔄 Обновить базу оборудования</button>
+          
+          <button onclick="window.exportRepairData()" style="
+            background-color: #FF9800;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+          ">📥 Экспорт заявок</button>
+        </div>
       </div>
     `;
   } catch (error) {
