@@ -1,24 +1,28 @@
-// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С СИНХРОНИЗАЦИЕЙ
+// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С РАБОЧЕЙ СИНХРОНИЗАЦИЕЙ
 
 // Константы
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.1.0';
 const APP_NAME = 'Ремонтный журнал';
 
 // Ссылки на GitHub для данных
-const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/aitof-stack/repair-journal/main/';
+const GITHUB_REPO = 'aitof-stack/repair-journal';
+const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/' + GITHUB_REPO + '/main/';
+const GITHUB_API_URL = 'https://api.github.com/repos/' + GITHUB_REPO + '/contents/';
 const EQUIPMENT_DB_URL = GITHUB_RAW_URL + 'data/equipment_database.csv';
 const REPAIR_REQUESTS_URL = GITHUB_RAW_URL + 'data/repair_requests.json';
+const GITHUB_PAGES_URL = 'https://aitof-stack.github.io/repair-journal/';
 
 // Ключи для хранения данных
 const STORAGE_KEYS = {
-    EQUIPMENT_DB: 'equipmentDatabase',
-    REPAIR_REQUESTS: 'repairRequests',
+    EQUIPMENT_DB: 'equipmentDatabase_v3',
+    REPAIR_REQUESTS: 'repairRequests_v3',
     CURRENT_USER: 'repair_journal_currentUser',
     AUTH_STATUS: 'repair_journal_isAuthenticated',
-    DB_LAST_UPDATED: 'equipmentDBLastUpdated',
-    REQUESTS_LAST_UPDATED: 'requestsLastUpdated',
-    LAST_SYNC_TIME: 'lastSyncTime',
-    SYNC_PENDING: 'syncPendingRequests'
+    DB_LAST_UPDATED: 'equipmentDBLastUpdated_v3',
+    REQUESTS_LAST_UPDATED: 'requestsLastUpdated_v3',
+    LAST_SYNC_TIME: 'lastSyncTime_v3',
+    SYNC_PENDING: 'syncPendingRequests_v3',
+    DEVICE_ID: 'deviceId'
 };
 
 // Переменные приложения
@@ -29,6 +33,7 @@ let isOnline = navigator.onLine;
 let isDBLoading = false;
 let syncInProgress = false;
 let pendingSyncRequests = [];
+let deviceId = null;
 
 // DOM элементы
 let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
@@ -38,9 +43,25 @@ let pendingRequestsElement, completedRequestsElement, totalDowntimeElement;
 
 // ============ ИНИЦИАЛИЗАЦИЯ ============
 
+// Генерация уникального ID устройства
+function generateDeviceId() {
+    let id = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+    if (!id) {
+        id = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem(STORAGE_KEYS.DEVICE_ID, id);
+    }
+    return id;
+}
+
 // Запуск при загрузке DOM
 document.addEventListener('DOMContentLoaded', function() {
     console.log(`${APP_NAME} v${APP_VERSION} запускается...`);
+    console.log('URL:', window.location.href);
+    console.log('GitHub Pages URL:', GITHUB_PAGES_URL);
+    
+    // Генерируем ID устройства
+    deviceId = generateDeviceId();
+    console.log('Device ID:', deviceId);
     
     // Загружаем ожидающие синхронизацию заявки
     loadPendingSyncRequests();
@@ -128,25 +149,7 @@ function initApp() {
     // Настройка поиска в выпадающем списке
     setupSearchableSelect();
     
-    // Добавляем кнопку синхронизации
-    addSyncButton();
-    
     console.log('Приложение успешно запущено');
-}
-
-// Добавить кнопку синхронизации
-function addSyncButton() {
-    const buttonGroup = document.querySelector('.button-group');
-    if (!buttonGroup) return;
-    
-    const syncBtn = document.createElement('button');
-    syncBtn.type = 'button';
-    syncBtn.className = 'btn sync-btn';
-    syncBtn.innerHTML = '🔄 Синхронизация';
-    syncBtn.title = 'Синхронизировать данные с сервером';
-    syncBtn.onclick = window.syncAllData;
-    
-    buttonGroup.appendChild(syncBtn);
 }
 
 // Инициализация DOM элементов
@@ -258,11 +261,10 @@ window.syncAllData = async function() {
     }
     
     syncInProgress = true;
+    showNotification('Начата синхронизация данных...', 'info');
     
     try {
-        showNotification('Начата синхронизация данных...', 'info');
-        
-        // 1. Сначала синхронизируем заявки
+        // 1. Сначала синхронизируем заявки с сервера
         await syncRepairRequests();
         
         // 2. Обновляем базу оборудования
@@ -276,6 +278,9 @@ window.syncAllData = async function() {
         updateSummary();
         updateDBButtonInfo();
         
+        // 5. Сохраняем время последней синхронизации
+        localStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, new Date().toISOString());
+        
     } catch (error) {
         console.error('Ошибка синхронизации:', error);
         showNotification('Ошибка синхронизации: ' + error.message, 'error');
@@ -287,20 +292,32 @@ window.syncAllData = async function() {
 // Синхронизация заявок
 async function syncRepairRequests() {
     if (!isOnline) {
-        throw new Error('Нет подключения к интернету');
+        throw new Error('Нет подключения к интернету. Проверьте соединение.');
     }
     
     try {
+        console.log('Начинаем синхронизацию заявок...');
+        
         // Загружаем заявки с сервера
         const serverRequests = await loadRepairRequestsFromServer();
+        console.log('Загружено с сервера:', serverRequests.length, 'заявок');
         
         // Объединяем с локальными заявками
-        const mergedRequests = mergeRequests(repairRequests, serverRequests);
+        const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
+        console.log('Локальные заявки:', localRequests.length);
+        
+        const mergedRequests = mergeRequests(localRequests, serverRequests);
+        console.log('После объединения:', mergedRequests.length, 'заявок');
         
         // Добавляем ожидающие синхронизацию заявки
         if (pendingSyncRequests.length > 0) {
             console.log('Добавляем ожидающие заявки:', pendingSyncRequests.length);
             pendingSyncRequests.forEach(request => {
+                // Добавляем метаданные о синхронизации
+                request.synced = true;
+                request.syncDeviceId = deviceId;
+                request.syncTimestamp = new Date().toISOString();
+                
                 if (!mergedRequests.some(r => r.id === request.id)) {
                     mergedRequests.push(request);
                 }
@@ -311,7 +328,7 @@ async function syncRepairRequests() {
             savePendingSyncRequests();
         }
         
-        // Сохраняем объединенные данные
+        // Сохраняем объединенные данные локально
         repairRequests = mergedRequests;
         localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
         localStorage.setItem(STORAGE_KEYS.REQUESTS_LAST_UPDATED, new Date().toISOString());
@@ -324,6 +341,7 @@ async function syncRepairRequests() {
         console.log('Заявки синхронизированы. Всего:', repairRequests.length);
         
     } catch (error) {
+        console.error('Ошибка синхронизации заявок:', error);
         throw error;
     }
 }
@@ -331,58 +349,134 @@ async function syncRepairRequests() {
 // Загрузить заявки с сервера
 async function loadRepairRequestsFromServer() {
     try {
-        const response = await safeFetch(REPAIR_REQUESTS_URL + '?t=' + Date.now());
+        console.log('Загрузка заявок с сервера:', REPAIR_REQUESTS_URL);
+        
+        // Добавляем случайный параметр для предотвращения кэширования
+        const url = REPAIR_REQUESTS_URL + '?t=' + Date.now();
+        const response = await fetchWithTimeout(url, 10000);
         
         if (!response.ok) {
+            console.warn('Статус ответа:', response.status, response.statusText);
+            
             // Если файла нет, создаем пустой массив
             if (response.status === 404) {
+                console.log('Файл заявок не найден на сервере, создаем новый');
                 return [];
             }
-            throw new Error(`Ошибка сервера: ${response.status}`);
+            
+            // Если ошибка CORS, пробуем альтернативный метод
+            if (response.type === 'opaque' || response.status === 0) {
+                console.log('CORS ошибка, пробуем альтернативный метод...');
+                return await loadRepairRequestsAlternative();
+            }
+            
+            throw new Error(`Ошибка сервера: ${response.status} ${response.statusText}`);
         }
         
-        const data = await response.json();
+        const text = await response.text();
+        console.log('Получен ответ от сервера, длина:', text.length);
+        
+        if (!text.trim()) {
+            console.log('Пустой ответ от сервера');
+            return [];
+        }
+        
+        try {
+            const data = JSON.parse(text);
+            console.log('Данные успешно распарсены');
+            return Array.isArray(data) ? data : [];
+        } catch (parseError) {
+            console.error('Ошибка парсинга JSON:', parseError);
+            console.log('Содержимое ответа (первые 500 символов):', text.substring(0, 500));
+            return [];
+        }
+        
+    } catch (error) {
+        console.error('Ошибка загрузки заявок с сервера:', error);
+        
+        // Пробуем альтернативный метод
+        try {
+            const alternativeData = await loadRepairRequestsAlternative();
+            console.log('Альтернативный метод дал:', alternativeData.length, 'заявок');
+            return alternativeData;
+        } catch (altError) {
+            console.error('Альтернативный метод также не сработал:', altError);
+            return [];
+        }
+    }
+}
+
+// Альтернативный метод загрузки заявок
+async function loadRepairRequestsAlternative() {
+    try {
+        // Пробуем использовать GitHub Pages URL
+        const altUrl = GITHUB_PAGES_URL + 'data/repair_requests.json?t=' + Date.now();
+        console.log('Пробуем альтернативный URL:', altUrl);
+        
+        const response = await fetchWithTimeout(altUrl, 10000);
+        
+        if (!response.ok) {
+            throw new Error(`Альтернативный запрос неудачен: ${response.status}`);
+        }
+        
+        const text = await response.text();
+        
+        if (!text.trim()) {
+            return [];
+        }
+        
+        const data = JSON.parse(text);
         return Array.isArray(data) ? data : [];
         
     } catch (error) {
-        console.warn('Не удалось загрузить заявки с сервера:', error.message);
+        console.error('Альтернативный метод не сработал:', error);
         return [];
     }
 }
 
-// Сохранить заявки на сервер (через GitHub API)
-async function saveRepairRequestsToServer(requests) {
-    // ВНИМАНИЕ: Для сохранения на GitHub нужен токен и серверный скрипт
-    // В этом примере только имитация
-    
-    console.log('Сохранение на сервер (имитация):', requests.length, 'заявок');
-    
-    // В реальном приложении здесь должен быть запрос к вашему бэкенду
-    // или использование GitHub API с токеном
-    
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            console.log('Данные "сохранены" на сервере');
-            resolve(true);
-        }, 1000);
-    });
+// Fetch с таймаутом
+function fetchWithTimeout(url, timeout = 10000) {
+    return Promise.race([
+        fetch(url, {
+            mode: 'cors',
+            cache: 'no-cache',
+            headers: {
+                'Accept': 'application/json,text/plain,*/*'
+            }
+        }),
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Таймаут запроса')), timeout)
+        )
+    ]);
 }
 
 // Объединить заявки
 function mergeRequests(localRequests, serverRequests) {
     const mergedMap = new Map();
     
-    // Добавляем серверные заявки
+    // Сначала добавляем серверные заявки
     serverRequests.forEach(request => {
-        mergedMap.set(request.id, request);
+        if (request && request.id) {
+            mergedMap.set(request.id, request);
+        }
     });
     
-    // Добавляем локальные заявки (перезаписываем более новые версии)
+    // Затем добавляем локальные (перезаписываем если новее)
     localRequests.forEach(request => {
+        if (!request || !request.id) return;
+        
         const existing = mergedMap.get(request.id);
         
-        if (!existing || (request.updatedAt > existing.updatedAt)) {
+        if (!existing) {
             mergedMap.set(request.id, request);
+        } else {
+            // Сравниваем время обновления
+            const localTime = new Date(request.updatedAt || request.createdAt || 0);
+            const serverTime = new Date(existing.updatedAt || existing.createdAt || 0);
+            
+            if (localTime > serverTime) {
+                mergedMap.set(request.id, request);
+            }
         }
     });
     
@@ -516,16 +610,27 @@ window.deleteRequest = async function(id) {
         repairRequests = repairRequests.filter(req => req.id !== id);
         localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
         
-        // Если онлайн, пытаемся удалить с сервера
-        if (isOnline && currentUser.type === 'admin') {
-            // Здесь должна быть логика удаления с сервера
-            console.log('Заявка удалена с сервера (имитация)');
-        }
+        // Помечаем для удаления на сервере
+        request.deleted = true;
+        request.deletedAt = new Date().toISOString();
+        request.deletedBy = currentUser.name;
+        
+        pendingSyncRequests.push(request);
+        savePendingSyncRequests();
         
         renderRepairTable();
         updateSummary();
         
-        showNotification('Заявка успешно удалена', 'success');
+        showNotification('Заявка удалена', 'success');
+        
+        // Если онлайн, пытаемся синхронизировать
+        if (isOnline) {
+            setTimeout(() => {
+                window.syncAllData().catch(() => {
+                    console.log('Фоновая синхронизация не удалась');
+                });
+            }, 1000);
+        }
         
     } catch (error) {
         console.error('Ошибка при удалении заявки:', error);
@@ -583,80 +688,33 @@ window.completeRequest = async function(id) {
     request.downtimeHours = downtimeHours;
     request.updatedAt = new Date().toISOString();
     request.completedBy = currentUser.name;
+    request.syncDeviceId = deviceId;
     
     // Сохраняем локально
     localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
     
-    // Если оффлайн, добавляем в ожидающие синхронизацию
+    // Добавляем в ожидающие синхронизацию
+    pendingSyncRequests.push(request);
+    savePendingSyncRequests();
+    
     if (!isOnline) {
-        pendingSyncRequests.push(request);
-        savePendingSyncRequests();
         showNotification('Изменение сохранено локально. Синхронизируйте при появлении интернета.', 'warning');
     } else {
-        // Если онлайн, пытаемся синхронизировать
-        try {
-            await syncRepairRequests();
-        } catch (error) {
-            console.warn('Не удалось синхронизировать:', error);
-            pendingSyncRequests.push(request);
-            savePendingSyncRequests();
-            showNotification('Изменение сохранено локально. Ошибка синхронизации.', 'warning');
-        }
+        showNotification('Ремонт завершен! Изменения сохранены.', 'success');
+        
+        // Фоновая синхронизация
+        setTimeout(() => {
+            window.syncAllData().catch(() => {
+                console.log('Фоновая синхронизация не удалась');
+            });
+        }, 1000);
     }
     
     renderRepairTable();
     updateSummary();
-    
-    showNotification(`Ремонт завершен! Время простоя: ${downtimeHours.toFixed(1)} ч`, 'success');
 };
 
 // ============ ЗАГРУЗКА ДАННЫХ ============
-
-// Безопасный fetch
-async function safeFetch(url, options = {}, maxRetries = 2) {
-    let lastError;
-    
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-            if (attempt > 0) {
-                const delay = 1000 * Math.pow(2, attempt - 1);
-                console.log(`Повторная попытка ${attempt} через ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-            
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
-            
-            const response = await fetch(url, {
-                ...options,
-                signal: controller.signal,
-                mode: 'cors',
-                headers: {
-                    'Accept': 'text/csv,text/plain,application/json,*/*',
-                    ...options.headers
-                }
-            });
-            
-            clearTimeout(timeoutId);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            return response;
-            
-        } catch (error) {
-            lastError = error;
-            console.warn(`Попытка ${attempt + 1} не удалась:`, error.message);
-            
-            if (attempt === maxRetries) {
-                throw new Error(`Не удалось загрузить данные после ${maxRetries + 1} попыток: ${lastError.message}`);
-            }
-        }
-    }
-    
-    throw lastError;
-}
 
 // Загрузка всех данных
 async function loadAllData() {
@@ -670,6 +728,15 @@ async function loadAllData() {
         ]);
         
         applyFilters();
+        
+        // Автоматическая синхронизация если онлайн
+        if (isOnline) {
+            setTimeout(() => {
+                window.syncAllData().catch(error => {
+                    console.log('Автоматическая синхронизация не удалась:', error.message);
+                });
+            }, 2000);
+        }
         
         setTimeout(() => {
             const notification = document.getElementById('notification');
@@ -702,19 +769,27 @@ async function loadEquipmentDatabase(forceUpdate = false) {
         if (shouldUpdate && isOnline) {
             console.log('Загрузка базы оборудования с сервера...');
             
-            const response = await safeFetch(EQUIPMENT_DB_URL + '?t=' + Date.now(), {
-                cache: forceUpdate ? 'no-cache' : 'default'
-            });
+            const url = EQUIPMENT_DB_URL + '?t=' + Date.now();
+            console.log('URL базы оборудования:', url);
+            
+            const response = await fetchWithTimeout(url, 15000);
+            
+            if (!response.ok) {
+                throw new Error(`Ошибка HTTP ${response.status}: ${response.statusText}`);
+            }
             
             const csvContent = await response.text();
             
             if (!csvContent || csvContent.trim().length === 0) {
-                throw new Error('CSV файл пуст');
+                throw new Error('CSV файл пуст или не загружен');
             }
+            
+            console.log('CSV загружен, длина:', csvContent.length);
             
             equipmentDatabase = parseCSV(csvContent);
             
             if (equipmentDatabase.length === 0) {
+                console.log('Содержимое CSV для отладки:', csvContent.substring(0, 1000));
                 throw new Error('Не удалось загрузить данные оборудования');
             }
             
@@ -771,31 +846,35 @@ async function loadEquipmentDatabase(forceUpdate = false) {
 // Загрузка заявок
 async function loadRepairRequests() {
     try {
-        // Пытаемся загрузить с сервера если онлайн
+        console.log('Загрузка заявок...');
+        
+        // Сначала загружаем локальные
+        const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
+        console.log('Локальные заявки:', localRequests.length);
+        
+        // Если онлайн, пытаемся загрузить с сервера
+        let serverRequests = [];
         if (isOnline) {
-            const serverRequests = await loadRepairRequestsFromServer();
-            
-            // Объединяем с локальными
-            const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
-            const mergedRequests = mergeRequests(localRequests, serverRequests);
-            
-            repairRequests = mergedRequests;
-            localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
-            localStorage.setItem(STORAGE_KEYS.REQUESTS_LAST_UPDATED, new Date().toISOString());
-            
-            console.log('Загружено заявок с сервера:', serverRequests.length, 'Всего:', repairRequests.length);
-        } else {
-            // Только локальные данные
-            const savedRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS));
-            
-            if (savedRequests && Array.isArray(savedRequests)) {
-                repairRequests = savedRequests;
-                console.log('Загружены локальные заявки:', repairRequests.length);
-            } else {
-                repairRequests = [];
-                console.log('Нет сохраненных заявок');
+            try {
+                serverRequests = await loadRepairRequestsFromServer();
+                console.log('Серверные заявки:', serverRequests.length);
+            } catch (serverError) {
+                console.warn('Не удалось загрузить с сервера:', serverError.message);
+                serverRequests = [];
             }
         }
+        
+        // Объединяем
+        const mergedRequests = mergeRequests(localRequests, serverRequests);
+        
+        // Фильтруем удаленные
+        repairRequests = mergedRequests.filter(req => !req.deleted);
+        
+        // Сохраняем локально
+        localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+        localStorage.setItem(STORAGE_KEYS.REQUESTS_LAST_UPDATED, new Date().toISOString());
+        
+        console.log('Всего заявок после загрузки:', repairRequests.length);
         
     } catch (error) {
         console.error('Ошибка загрузки заявок:', error);
@@ -804,7 +883,7 @@ async function loadRepairRequests() {
         const savedRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS));
         
         if (savedRequests && Array.isArray(savedRequests)) {
-            repairRequests = savedRequests;
+            repairRequests = savedRequests.filter(req => !req.deleted);
             console.log('Используем локальные заявки после ошибки:', repairRequests.length);
         } else {
             repairRequests = [];
@@ -850,19 +929,18 @@ function parseCSV(csvContent) {
         try {
             const parts = parseCSVLine(line, delimiter);
             
-            if (parts.length >= 5) {
+            if (parts.length >= 3) {
                 const item = {
                     location: cleanValue(parts[0]),
                     invNumber: cleanValue(parts[1]),
                     name: cleanValue(parts[2]),
-                    model: cleanValue(parts[3]) || '-',
-                    machineNumber: cleanValue(parts[4]) || '-'
+                    model: parts.length > 3 ? cleanValue(parts[3]) : '-',
+                    machineNumber: parts.length > 4 ? cleanValue(parts[4]) : '-'
                 };
                 
                 if (item.invNumber && item.name && item.name.length > 2) {
                     if (!item.name.toLowerCase().includes('наименование') &&
-                        !item.name.toLowerCase().includes('оборудование') &&
-                        !isNaN(parseInt(item.invNumber.replace(/\D/g, '')))) {
+                        !item.name.toLowerCase().includes('оборудование')) {
                         equipment.push(item);
                     }
                 }
@@ -908,7 +986,7 @@ function parseCSVLine(line, delimiter) {
     }
     
     result.push(current);
-    return result;
+    return result.map(v => v.trim());
 }
 
 // Очистка значения
@@ -937,6 +1015,8 @@ function parseCSVAlternative(csvContent) {
             parts = line.split(';').map(p => p.trim().replace(/^["']|["']$/g, ''));
         } else if (line.includes(',')) {
             parts = line.split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
+        } else if (line.includes('\t')) {
+            parts = line.split('\t').map(p => p.trim().replace(/^["']|["']$/g, ''));
         }
         
         if (parts && parts.length >= 3) {
@@ -951,8 +1031,7 @@ function parseCSVAlternative(csvContent) {
             if (item.invNumber && 
                 item.name && 
                 item.name.length > 2 &&
-                !item.name.toLowerCase().includes('наименование') &&
-                !isNaN(parseInt(item.invNumber.replace(/\D/g, '')))) {
+                !item.name.toLowerCase().includes('наименование')) {
                 equipment.push(item);
             }
         }
@@ -1154,9 +1233,9 @@ function addEventListeners() {
             setTimeout(() => {
                 showNotification('Автоматическая синхронизация...', 'info');
                 window.syncAllData().catch(() => {
-                    console.warn('Автоматическая синхронизация не удалась');
+                    console.log('Автоматическая синхронизация не удалась');
                 });
-            }, 3000);
+            }, 2000);
         }
     });
     
@@ -1226,7 +1305,7 @@ async function handleFormSubmit(e) {
     
     try {
         const newRequest = createRequestFromForm();
-        addRepairRequest(newRequest);
+        await addRepairRequest(newRequest);
         
         renderRepairTable();
         updateSummary();
@@ -1282,28 +1361,30 @@ function createRequestFromForm() {
         downtimeHours: 0,
         productionItem: document.getElementById('productionItem')?.value || '-',
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        deviceId: deviceId,
+        createdBy: currentUser.name
     };
 }
 
 // Добавить заявку
 async function addRepairRequest(request) {
+    // Добавляем локально
     repairRequests.push(request);
     localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
     
+    // Добавляем в ожидающие синхронизацию
+    pendingSyncRequests.push(request);
+    savePendingSyncRequests();
+    
     // Если онлайн, пытаемся синхронизировать
     if (isOnline) {
-        try {
-            await syncRepairRequests();
-        } catch (error) {
-            console.warn('Не удалось синхронизировать новую заявку:', error);
-            pendingSyncRequests.push(request);
-            savePendingSyncRequests();
-            showNotification('Заявка сохранена локально. Ошибка синхронизации.', 'warning');
-        }
+        setTimeout(() => {
+            window.syncAllData().catch(() => {
+                console.log('Фоновая синхронизация не удалась');
+            });
+        }, 1000);
     } else {
-        pendingSyncRequests.push(request);
-        savePendingSyncRequests();
         showNotification('Заявка сохранена локально. Синхронизируйте при появлении интернета.', 'warning');
     }
     
@@ -1556,6 +1637,8 @@ function applyFilters() {
 // Генерация HTML дашборда
 function generateDashboardHTML() {
     const stats = calculateDashboardStats();
+    const lastSyncTime = localStorage.getItem(STORAGE_KEYS.LAST_SYNC_TIME);
+    const lastSync = lastSyncTime ? new Date(lastSyncTime).toLocaleString('ru-RU') : 'никогда';
     
     return `
         <div class="dashboard-stats">
@@ -1585,14 +1668,24 @@ function generateDashboardHTML() {
         </div>
         
         <div style="margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
+            <h3 style="color: #4CAF50; margin-top: 0;">Статус синхронизации</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                <div><strong>Статус:</strong> <span style="color: ${isOnline ? '#4CAF50' : '#F44336'}">${isOnline ? 'Онлайн' : 'Оффлайн'}</span></div>
+                <div><strong>Последняя синхронизация:</strong> ${lastSync}</div>
+                <div><strong>Ожидают синхронизации:</strong> <span style="color: ${pendingSyncRequests.length > 0 ? '#FF9800' : '#4CAF50'}">${pendingSyncRequests.length} заявок</span></div>
+                <div><strong>Устройство:</strong> ${deviceId.substring(0, 15)}...</div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
             <h3 style="color: #4CAF50; margin-top: 0;">Ключевые показатели</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
                 <div><strong>Общий простой:</strong> ${stats.totalDowntime} часов</div>
                 <div><strong>Эффективность:</strong> ${stats.efficiency}% завершено вовремя</div>
                 <div><strong>Заявок в этом месяце:</strong> ${stats.thisMonthRequests}</div>
                 <div><strong>Завершено в этом месяце:</strong> ${stats.thisMonthCompleted}</div>
-                <div><strong>Ожидают синхронизации:</strong> ${pendingSyncRequests.length} заявок</div>
-                <div><strong>Последняя синхронизация:</strong> ${stats.lastSync || 'нет данных'}</div>
+                <div><strong>База оборудования:</strong> ${equipmentDatabase.length} записей</div>
+                <div><strong>Пользователь:</strong> ${currentUser.name}</div>
             </div>
         </div>
         
@@ -1630,6 +1723,9 @@ function generateDashboardHTML() {
                 cursor: pointer;
                 font-size: 16px;
                 margin: 10px;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
             ">🔄 Синхронизировать все данные</button>
             
             <button onclick="window.updateEquipmentDB()" style="
@@ -1641,12 +1737,29 @@ function generateDashboardHTML() {
                 cursor: pointer;
                 font-size: 16px;
                 margin: 10px;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
             ">🔄 Обновить базу оборудования</button>
+            
+            <button onclick="window.exportRepairData()" style="
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 16px;
+                margin: 10px;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+            ">📥 Экспорт заявок</button>
         </div>
         
         <div style="margin-top: 30px; font-size: 12px; color: #666; text-align: center;">
             Данные обновлены: ${new Date().toLocaleString('ru-RU')}<br>
-            Статус: ${isOnline ? 'Онлайн' : 'Оффлайн'} | Заявок: ${repairRequests.length}
+            Приложение: ${APP_NAME} v${APP_VERSION} | Устройство: ${deviceId.substring(0, 10)}...
         </div>
     `;
 }
@@ -1691,9 +1804,6 @@ function calculateDashboardStats() {
         ? ((completedWithinDay / completedRequests) * 100).toFixed(1) 
         : '0.0';
     
-    const lastSyncTime = localStorage.getItem(STORAGE_KEYS.LAST_SYNC_TIME);
-    const lastSync = lastSyncTime ? new Date(lastSyncTime).toLocaleString('ru-RU') : 'нет данных';
-    
     const equipmentStats = {};
     repairRequests.forEach(req => {
         const key = req.equipmentName || req.invNumber;
@@ -1725,7 +1835,6 @@ function calculateDashboardStats() {
         thisMonthRequests,
         thisMonthCompleted,
         efficiency,
-        lastSync,
         topEquipment
     };
 }
@@ -1846,6 +1955,16 @@ function setupSearchableSelect() {
 window.addEventListener('error', function(e) {
     console.error('Глобальная ошибка:', e.error);
     showNotification('Произошла ошибка в приложении', 'error');
+});
+
+// Инициализация при полной загрузке
+window.addEventListener('load', function() {
+    console.log('Окно полностью загружено');
+    
+    // Проверяем, находимся ли мы на GitHub Pages
+    if (window.location.href.includes('github.io')) {
+        console.log('Работаем на GitHub Pages');
+    }
 });
 
 console.log(`${APP_NAME} v${APP_VERSION} готово к работе!`);
