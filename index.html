@@ -8,7 +8,6 @@
     <meta name="theme-color" content="#4CAF50">
     <title>Журнал заявок на ремонт оборудования</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
     <style>
         * {
             -webkit-tap-highlight-color: transparent;
@@ -786,15 +785,15 @@
             });
         }
 
-        // Показываем кнопку принудительного обновления через 30 секунд
+        // Показываем кнопку принудительного обновления через 10 секунд
         setTimeout(() => {
             const loadingScreen = document.getElementById('loadingScreen');
             if (loadingScreen && loadingScreen.style.display !== 'none') {
                 document.getElementById('forceUpdateBtn').style.display = 'block';
             }
-        }, 30000);
+        }, 10000);
         
-        // Экстренный запуск приложения через 15 секунд
+        // Экстренный запуск приложения через 5 секунд
         setTimeout(() => {
             const loadingScreen = document.getElementById('loadingScreen');
             const mainContainer = document.getElementById('mainContainer');
@@ -805,7 +804,18 @@
                 if (mainContainer) {
                     mainContainer.style.display = 'block';
                 }
-                showNotification('Приложение запущено в безопасном режиме', 'warning');
+                
+                // Показываем сообщение
+                if (typeof showNotification === 'function') {
+                    showNotification('Приложение запущено в безопасном режиме', 'warning');
+                } else {
+                    const notification = document.getElementById('notification');
+                    if (notification) {
+                        notification.textContent = 'Приложение запущено в безопасном режиме';
+                        notification.className = 'notification warning';
+                        notification.style.display = 'block';
+                    }
+                }
                 
                 // Создаем кнопку аварийного доступа
                 const emergencyAccess = document.createElement('div');
@@ -818,7 +828,7 @@
                 `;
                 emergencyAccess.innerHTML = `
                     <h3 style="color: #f57c00;">Аварийный доступ</h3>
-                    <p style="margin-bottom: 15px;">Если приложение не загружается, используйте эти кнопки:</p>
+                    <p style="margin-bottom: 15px;">Используйте эти кнопки для доступа к функциям:</p>
                     <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
                         <button onclick="window.location.href='login.html'" 
                                 style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px;">
@@ -835,7 +845,7 @@
                     mainContainer.prepend(emergencyAccess);
                 }
             }
-        }, 15000);
+        }, 5000);
         
         // Глобальная функция показа уведомлений
         function showNotification(message, type = 'info') {
