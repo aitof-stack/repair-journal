@@ -1,18 +1,17 @@
-// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ 4.1.0
+// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ 4.1.2
 // С РАБОЧЕЙ СИНХРОНИЗАЦИЕЙ ЧЕРЕЗ GITHUB GIST
 
 // Константы
-const APP_VERSION = '4.1.0';
+const APP_VERSION = '4.1.2';
 const APP_NAME = 'Ремонтный журнал';
 
-// Настройки GitHub Gist (ЗАМЕНИТЕ НА СВОИ!)
+// Настройки GitHub Gist
 const GIST_ID = 'd356b02c2c182270935739995790fc20';
-const GITHUB_TOKEN = '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';
 const GIST_FILENAME = 'repair_requests.json';
 
 // URL для работы с Gist API
-const GIST_API_URL = `https://api.github.com/gists/${d356b02c2c182270935739995790fc20}`;
-const GIST_RAW_URL = `https://gist.githubusercontent.com/aitof-stack/${GIST_ID}/raw/${d356b02c2c182270935739995790fc20/raw/repair_requests.json}`;
+const GIST_API_URL = `https://api.github.com/gists/${GIST_ID}`;
+const GIST_RAW_URL = `https://gist.githubusercontent.com/aitof-stack/${GIST_ID}/raw/${GIST_FILENAME}`;
 
 // Ключи для хранения данных
 const STORAGE_KEYS = {
@@ -25,7 +24,8 @@ const STORAGE_KEYS = {
   LAST_SYNC_TIME: 'lastSyncTime_v4',
   SYNC_PENDING: 'syncPendingRequests_v4',
   DEVICE_ID: 'deviceId_v4',
-  LAST_SYNC_HASH: 'lastSyncHash_v4'
+  LAST_SYNC_HASH: 'lastSyncHash_v4',
+  GITHUB_TOKEN: 'github_token_secure' // Безопасное хранение токена
 };
 
 // Переменные приложения
@@ -38,6 +38,7 @@ let syncInProgress = false;
 let pendingSyncRequests = [];
 let deviceId = null;
 let lastSyncHash = null;
+let githubToken = '';
 
 // ============ ИНИЦИАЛИЗАЦИЯ ============
 
@@ -51,12 +52,306 @@ function generateDeviceId() {
   return id;
 }
 
+// Загрузка GitHub токена из безопасного хранилища
+function loadGitHubToken() {
+  try {
+    // Сначала пробуем загрузить из localStorage
+    const token = localStorage.getItem(STORAGE_KEYS.GITHUB_TOKEN);
+    if (token) {
+      githubToken = token;
+      console.log('GitHub Token загружен из хранилища');
+      return true;
+    }
+    
+    // Пробуем загрузить из sessionStorage (для текущей сессии)
+    const sessionToken = sessionStorage.getItem(STORAGE_KEYS.GITHUB_TOKEN);
+    if (sessionToken) {
+      githubToken = sessionToken;
+      console.log('GitHub Token загружен из сессии');
+      return true;
+    }
+    
+    // Если у пользователя уже был токен в старом формате
+    const oldToken = localStorage.getItem('github_token');
+    if (oldToken) {
+      githubToken = oldToken;
+      console.log('GitHub Token загружен из старого хранилища');
+      // Мигрируем в новое хранилище
+      saveGitHubToken(oldToken, true);
+      localStorage.removeItem('github_token');
+      return true;
+    }
+    
+    console.log('GitHub Token не найден');
+    return false;
+    
+  } catch (error) {
+    console.error('Ошибка загрузки токена:', error);
+    return false;
+  }
+}
+
+// Сохранение GitHub токена в безопасное хранилище
+function saveGitHubToken(token, remember = true) {
+  try {
+    if (remember) {
+      // Сохраняем в localStorage (постоянно)
+      localStorage.setItem(STORAGE_KEYS.GITHUB_TOKEN, token);
+      console.log('GitHub Token сохранен в постоянное хранилище');
+    } else {
+      // Сохраняем только в sessionStorage (до закрытия браузера)
+      sessionStorage.setItem(STORAGE_KEYS.GITHUB_TOKEN, token);
+      console.log('GitHub Token сохранен для текущей сессии');
+    }
+    
+    githubToken = token;
+    return true;
+    
+  } catch (error) {
+    console.error('Ошибка сохранения токена:', error);
+    return false;
+  }
+}
+
+// Удаление GitHub токена
+function clearGitHubToken() {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.GITHUB_TOKEN);
+    sessionStorage.removeItem(STORAGE_KEYS.GITHUB_TOKEN);
+    githubToken = '';
+    console.log('GitHub Token удален');
+    return true;
+  } catch (error) {
+    console.error('Ошибка удаления токена:', error);
+    return false;
+  }
+}
+
+// Проверка валидности токена (формат)
+function isValidToken(token) {
+  if (!token || token.length < 40) return false;
+  
+  // Проверяем, что токен начинается с ghp_ (GitHub Personal Access Token)
+  if (!token.startsWith('ghp_')) {
+    console.warn('Токен должен начинаться с ghp_');
+    return false;
+  }
+  
+  return true;
+}
+
+// Проверка токена на GitHub API
+async function testGitHubToken(token) {
+  try {
+    if (!token) return false;
+    
+    const response = await fetch('https://api.github.com/user', {
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+    
+    if (response.ok) {
+      const userData = await response.json();
+      console.log('Токен валиден для пользователя:', userData.login);
+      return true;
+    } else {
+      console.error('Неверный токен:', response.status);
+      return false;
+    }
+  } catch (error) {
+    console.error('Ошибка проверки токена:', error);
+    return false;
+  }
+}
+
+// Запрос GitHub токена у пользователя
+function requestGitHubToken(force = false) {
+  return new Promise((resolve, reject) => {
+    if (githubToken && !force) {
+      resolve(githubToken);
+      return;
+    }
+    
+    // Создаем модальное окно для ввода токена
+    const tokenModal = document.createElement('div');
+    tokenModal.className = 'modal';
+    tokenModal.style.display = 'block';
+    tokenModal.style.zIndex = '2000';
+    
+    tokenModal.innerHTML = `
+      <div class="modal-content" style="max-width: 500px; margin-top: 100px;">
+        <span class="close" onclick="closeTokenModal()">&times;</span>
+        <h2 style="color: #4CAF50; margin-bottom: 20px;">Настройка синхронизации</h2>
+        
+        <div style="margin-bottom: 20px; padding: 15px; background-color: #e8f5e9; border-radius: 6px; border-left: 4px solid #4CAF50;">
+          <p><strong>Для работы синхронизации требуется GitHub Token</strong></p>
+          <p style="font-size: 14px; margin-top: 10px;">Токен будет храниться только на вашем устройстве</p>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <p><strong>Как получить токен:</strong></p>
+          <ol style="margin-left: 20px; margin-bottom: 15px; font-size: 14px;">
+            <li>Зайдите на <a href="https://github.com/settings/tokens" target="_blank" style="color: #2196F3; text-decoration: underline;">GitHub Tokens</a></li>
+            <li>Нажмите "Generate new token (classic)"</li>
+            <li>Введите название: "Ремонтный журнал"</li>
+            <li>Выберите срок действия (рекомендуется 90 дней)</li>
+            <li>В разделе "Select scopes" выберите только <strong>gist</strong></li>
+            <li>Нажмите "Generate token" и скопируйте его</li>
+          </ol>
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 20px;">
+          <label for="tokenInput" style="font-weight: bold;">Ваш GitHub Token:</label>
+          <input type="password" id="tokenInput" 
+                 placeholder="Вставьте ваш токен сюда" 
+                 style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 6px; font-size: 16px; margin-top: 8px;"
+                 value="${githubToken ? '••••••••' + githubToken.slice(-4) : ''}">
+          
+          <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
+            <label style="font-size: 14px; cursor: pointer;">
+              <input type="checkbox" id="rememberToken" checked style="margin-right: 5px;">
+              Запомнить на этом устройстве
+            </label>
+            <span style="font-size: 12px; color: #666;">(рекомендуется)</span>
+          </div>
+          
+          <div id="tokenError" style="color: #f44336; font-size: 14px; margin-top: 10px; display: none;">
+            <strong>Ошибка:</strong> <span id="errorText"></span>
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+          <button id="cancelTokenBtn" 
+                  style="padding: 10px 20px; background-color: #f0f0f0; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            Отмена
+          </button>
+          <button id="saveTokenBtn" 
+                  style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            Сохранить токен
+          </button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(tokenModal);
+    
+    // Закрытие по клику вне окна
+    tokenModal.onclick = function(event) {
+      if (event.target === tokenModal) {
+        closeTokenModal();
+        reject(new Error('Ввод токена отменен'));
+      }
+    };
+    
+    function closeTokenModal() {
+      tokenModal.remove();
+      reject(new Error('Ввод токена отменен'));
+    }
+    
+    function submitToken() {
+      const tokenInput = document.getElementById('tokenInput');
+      const rememberToken = document.getElementById('rememberToken');
+      const errorDiv = document.getElementById('tokenError');
+      const errorText = document.getElementById('errorText');
+      
+      const token = tokenInput.value.trim();
+      
+      // Очистка предыдущих ошибок
+      errorDiv.style.display = 'none';
+      
+      if (!token) {
+        errorText.textContent = 'Введите токен';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      // Проверка формата токена
+      if (!isValidToken(token)) {
+        errorText.textContent = 'Неверный формат токена. Токен должен начинаться с ghp_ и иметь длину не менее 40 символов';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      // Проверка токена через GitHub API (асинхронно)
+      const saveBtn = document.getElementById('saveTokenBtn');
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Проверка токена...';
+      saveBtn.disabled = true;
+      
+      testGitHubToken(token).then(isValid => {
+        if (isValid) {
+          saveGitHubToken(token, rememberToken.checked);
+          tokenModal.remove();
+          showNotification('Токен успешно сохранен!', 'success');
+          resolve(token);
+        } else {
+          errorText.textContent = 'Токен недействителен или у него нет прав gist';
+          errorDiv.style.display = 'block';
+          saveBtn.textContent = originalText;
+          saveBtn.disabled = false;
+        }
+      }).catch(error => {
+        // Если проверка не удалась, все равно сохраняем токен (может быть проблема с сетью)
+        console.warn('Не удалось проверить токен через API:', error);
+        saveGitHubToken(token, rememberToken.checked);
+        tokenModal.remove();
+        showNotification('Токен сохранен. Проверка не удалась, но можно попробовать синхронизацию', 'warning');
+        resolve(token);
+      });
+    }
+    
+    // Обработчики кнопок
+    document.getElementById('saveTokenBtn').addEventListener('click', submitToken);
+    document.getElementById('cancelTokenBtn').addEventListener('click', closeTokenModal);
+    
+    // Enter для отправки
+    document.getElementById('tokenInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        submitToken();
+      }
+    });
+    
+    // Добавляем глобальные функции
+    window.closeTokenModal = closeTokenModal;
+    window.submitToken = submitToken;
+  });
+}
+
+// Автоматическая проверка и запрос токена при запуске
+async function initGitHubToken() {
+  const hasToken = loadGitHubToken();
+  
+  if (!hasToken && isOnline) {
+    // Если токена нет, показываем уведомление
+    showNotification('Для синхронизации требуется GitHub Token. Нажмите "🔄 Синхронизация" для настройки.', 'warning');
+  } else if (hasToken && isOnline) {
+    // Если токен есть, проверяем его валидность в фоне
+    setTimeout(async () => {
+      try {
+        const isValid = await testGitHubToken(githubToken);
+        if (!isValid) {
+          console.warn('Токен недействителен, требуется обновление');
+          showNotification('Токен устарел или недействителен. Обновите его через меню синхронизации.', 'warning');
+        }
+      } catch (error) {
+        // Игнорируем ошибки проверки в фоне
+        console.log('Фоновая проверка токена не удалась:', error.message);
+      }
+    }, 5000);
+  }
+}
+
 // Запуск при загрузке DOM
 document.addEventListener('DOMContentLoaded', function() {
   console.log(`${APP_NAME} v${APP_VERSION} запускается...`);
   
   deviceId = generateDeviceId();
   console.log('Device ID:', deviceId);
+  
+  // Инициализируем токен
+  initGitHubToken();
   
   loadPendingSyncRequests();
   lastSyncHash = localStorage.getItem(STORAGE_KEYS.LAST_SYNC_HASH) || '';
@@ -233,42 +528,82 @@ window.syncAllData = async function() {
     return;
   }
   
+  // Проверяем наличие токена
+  if (!githubToken) {
+    try {
+      showNotification('Настройка синхронизации...', 'info');
+      await requestGitHubToken();
+    } catch (error) {
+      showNotification('Синхронизация отменена: ' + error.message, 'error');
+      return;
+    }
+  }
+  
   syncInProgress = true;
   showNotification('Начата синхронизация данных...', 'info');
   
   try {
-    // 1. Отправляем ожидающие заявки на сервер
-    if (pendingSyncRequests.length > 0 && isOnline) {
-      await sendPendingRequestsToServer();
+    // 1. Проверяем токен перед синхронизацией
+    const isValid = await testGitHubToken(githubToken);
+    if (!isValid) {
+      throw new Error('Токен недействителен. Обновите токен.');
     }
     
-    // 2. Загружаем заявки с сервера
+    // 2. Отправляем ожидающие заявки на сервер
+    if (pendingSyncRequests.length > 0 && isOnline) {
+      const sentCount = await sendPendingRequestsToServer();
+      if (sentCount > 0) {
+        showNotification(`Отправлено ${sentCount} заявок на сервер`, 'success');
+      }
+    }
+    
+    // 3. Загружаем заявки с сервера
     if (isOnline) {
       await loadRepairRequestsFromServer();
     }
     
-    // 3. Объединяем с локальными данными
+    // 4. Объединяем с локальными данными
     await mergeAndSaveRequests();
     
-    // 4. Обновляем базу оборудования (если онлайн)
+    // 5. Обновляем базу оборудования (если онлайн)
     if (isOnline) {
       await loadEquipmentDatabase(true);
     }
     
-    // 5. Показываем результат
+    // 6. Показываем результат
     showNotification('Синхронизация завершена!', 'success');
     
-    // 6. Обновляем интерфейс
+    // 7. Обновляем интерфейс
     renderRepairTable();
     updateSummary();
     updateDBButtonInfo();
     
-    // 7. Сохраняем время последней синхронизации
+    // 8. Сохраняем время последней синхронизации
     localStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, new Date().toISOString());
     
   } catch (error) {
     console.error('Ошибка синхронизации:', error);
-    showNotification('Ошибка синхронизации: ' + error.message, 'error');
+    
+    if (error.message.includes('401') || error.message.includes('403')) {
+      showNotification('Ошибка авторизации. Токен недействителен или устарел.', 'error');
+      
+      // Предлагаем обновить токен
+      if (confirm('Токен недействителен. Хотите ввести новый токен?')) {
+        clearGitHubToken();
+        await requestGitHubToken(true);
+        
+        // Пробуем синхронизацию снова
+        if (githubToken) {
+          window.syncAllData();
+        }
+      }
+    } else if (error.message.includes('404')) {
+      showNotification('Gist не найден. Проверьте настройки Gist.', 'error');
+    } else if (error.message.includes('Network')) {
+      showNotification('Ошибка сети. Проверьте подключение к интернету.', 'error');
+    } else {
+      showNotification('Ошибка синхронизации: ' + error.message, 'error');
+    }
   } finally {
     syncInProgress = false;
     updateSyncMessage();
@@ -279,27 +614,29 @@ window.syncAllData = async function() {
 async function sendPendingRequestsToServer() {
   if (pendingSyncRequests.length === 0) {
     console.log('Нет заявок для отправки');
-    return;
+    return 0;
   }
   
   console.log(`Отправка ${pendingSyncRequests.length} заявок на сервер...`);
   
   // Проверяем наличие токена
-  if (!GITHUB_TOKEN || GITHUB_TOKEN.includes('ВАШ_ТОКЕН')) {
-    showNotification('⚠️ Для синхронизации нужен GitHub Token. Создайте токен и обновите код.', 'warning');
-    return;
+  if (!githubToken) {
+    throw new Error('GitHub Token не найден');
   }
   
   try {
     // 1. Сначала загружаем текущие данные из Gist
     const response = await fetch(GIST_API_URL, {
       headers: {
-        'Authorization': `token ${GITHUB_TOKEN}`,
+        'Authorization': `token ${githubToken}`,
         'Accept': 'application/vnd.github.v3+json'
       }
     });
     
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('Ошибка авторизации: неверный или устаревший токен');
+      }
       throw new Error(`Ошибка загрузки Gist: ${response.status}`);
     }
     
@@ -311,6 +648,10 @@ async function sendPendingRequestsToServer() {
     
     // 2. Объединяем данные
     let changesMade = false;
+    let addedCount = 0;
+    let updatedCount = 0;
+    let deletedCount = 0;
+    
     pendingSyncRequests.forEach(newRequest => {
       if (newRequest.deleted) {
         // Удаляем заявку
@@ -318,6 +659,7 @@ async function sendPendingRequestsToServer() {
         if (index !== -1) {
           currentRequests.splice(index, 1);
           changesMade = true;
+          deletedCount++;
           console.log('Заявка удалена:', newRequest.id);
         }
       } else {
@@ -332,12 +674,14 @@ async function sendPendingRequestsToServer() {
           if (newTime > existingTime) {
             currentRequests[existingIndex] = newRequest;
             changesMade = true;
+            updatedCount++;
             console.log('Заявка обновлена:', newRequest.id);
           }
         } else {
           // Добавляем новую
           currentRequests.push(newRequest);
           changesMade = true;
+          addedCount++;
           console.log('Заявка добавлена:', newRequest.id);
         }
       }
@@ -348,7 +692,7 @@ async function sendPendingRequestsToServer() {
       const updateResponse = await fetch(GIST_API_URL, {
         method: 'PATCH',
         headers: {
-          'Authorization': `token ${GITHUB_TOKEN}`,
+          'Authorization': `token ${githubToken}`,
           'Content-Type': 'application/json',
           'Accept': 'application/vnd.github.v3+json'
         },
@@ -367,29 +711,31 @@ async function sendPendingRequestsToServer() {
       }
       
       // 4. Очищаем ожидающие заявки
+      const totalChanges = addedCount + updatedCount + deletedCount;
       pendingSyncRequests = [];
       savePendingSyncRequests();
       
-      console.log('Заявки успешно сохранены в Gist');
-      showNotification(`Синхронизировано ${currentRequests.length} заявок`, 'success');
+      console.log('Заявки успешно сохранены в Gist:', totalChanges);
+      
+      // Показываем детальную статистику
+      let message = 'Синхронизация завершена:';
+      if (addedCount > 0) message += ` +${addedCount} добавлено`;
+      if (updatedCount > 0) message += ` ${updatedCount} обновлено`;
+      if (deletedCount > 0) message += ` ${deletedCount} удалено`;
+      
+      showNotification(message, 'success');
+      return totalChanges;
+      
     } else {
       console.log('Нет изменений для синхронизации');
       // Очищаем ожидающие, так как они уже есть на сервере
       pendingSyncRequests = [];
       savePendingSyncRequests();
+      return 0;
     }
     
   } catch (error) {
     console.error('Ошибка отправки заявок на сервер:', error);
-    
-    if (error.message.includes('401') || error.message.includes('403')) {
-      showNotification('Ошибка авторизации. Проверьте GitHub Token', 'error');
-    } else if (error.message.includes('404')) {
-      showNotification('Gist не найден. Проверьте ID Gist', 'error');
-    } else {
-      showNotification('Ошибка сети при синхронизации', 'error');
-    }
-    
     throw error;
   }
 }
@@ -570,6 +916,40 @@ window.exportRepairData = function() {
   showNotification(`Экспортировано ${repairRequests.length} заявок`, 'success');
 };
 
+// Управление токеном GitHub
+window.manageGitHubToken = async function() {
+  try {
+    await requestGitHubToken(true);
+    showNotification('Токен обновлен', 'success');
+  } catch (error) {
+    showNotification('Токен не обновлен: ' + error.message, 'error');
+  }
+};
+
+// Удалить токен
+window.clearGitHubToken = function() {
+  if (confirm('Вы уверены, что хотите удалить сохраненный GitHub Token?\n\nСинхронизация перестанет работать до ввода нового токена.')) {
+    clearGitHubToken();
+    showNotification('Токен удален. Синхронизация отключена.', 'warning');
+    updateSyncMessage();
+  }
+};
+
+// Показать текущий токен (маскированный)
+window.showGitHubToken = function() {
+  if (!githubToken) {
+    showNotification('Токен не настроен', 'warning');
+    return;
+  }
+  
+  const maskedToken = '••••••••' + githubToken.slice(-4);
+  const tokenInfo = `Токен настроен: ${maskedToken}\n\nПрава: gist\n\nДля изменения нажмите "Настроить токен"`;
+  
+  if (confirm(tokenInfo + '\n\nХотите настроить новый токен?')) {
+    window.manageGitHubToken();
+  }
+};
+
 // Показать дашборд
 window.showDashboard = function() {
   if (!checkAuth()) return;
@@ -641,7 +1021,7 @@ window.deleteRequest = async function(id) {
     showNotification('Заявка помечена для удаления', 'success');
     updateSyncMessage();
     
-    if (isOnline) {
+    if (isOnline && githubToken) {
       setTimeout(() => {
         window.syncAllData().catch(() => {
           console.log('Фоновая синхронизация не удалась');
@@ -719,7 +1099,7 @@ window.completeRequest = async function(id) {
   pendingSyncRequests.push(updatedRequest);
   savePendingSyncRequests();
   
-  if (!isOnline) {
+  if (!isOnline || !githubToken) {
     showNotification('Изменение сохранено локально. Синхронизируйте при появлении интернета.', 'warning');
   } else {
     showNotification('Ремонт завершен! Изменения сохранены.', 'success');
@@ -750,7 +1130,7 @@ async function loadAllData() {
     
     applyFilters();
     
-    if (isOnline) {
+    if (isOnline && githubToken) {
       setTimeout(() => {
         window.syncAllData().catch(error => {
           console.log('Автоматическая синхронизация не удалась:', error.message);
@@ -1192,7 +1572,7 @@ function addEventListeners() {
     checkConnection();
     updateSyncMessage();
     
-    if (pendingSyncRequests.length > 0) {
+    if (pendingSyncRequests.length > 0 && githubToken) {
       setTimeout(() => {
         showNotification('Автоматическая синхронизация...', 'info');
         window.syncAllData().catch(() => {
@@ -1341,7 +1721,7 @@ async function addRepairRequest(request) {
   
   updateSyncMessage();
   
-  if (isOnline) {
+  if (isOnline && githubToken) {
     setTimeout(() => {
       window.syncAllData().catch(() => {
         console.log('Фоновая синхронизация не удалась');
@@ -1604,6 +1984,8 @@ function generateDashboardHTML() {
   const lastSync = lastSyncTime ? new Date(lastSyncTime).toLocaleString('ru-RU') : 'никогда';
   const dbLastUpdated = localStorage.getItem(STORAGE_KEYS.DB_LAST_UPDATED);
   const dbDate = dbLastUpdated ? new Date(dbLastUpdated).toLocaleDateString('ru-RU') : 'неизвестно';
+  const tokenStatus = githubToken ? 'Настроен' : 'Не настроен';
+  const tokenPreview = githubToken ? '••••••••' + githubToken.slice(-4) : 'Не указан';
   
   return `
     <div class="dashboard-stats">
@@ -1636,10 +2018,41 @@ function generateDashboardHTML() {
       <h3 style="color: #4CAF50; margin-top: 0;">Статус синхронизации</h3>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
         <div><strong>Статус:</strong> <span style="color: ${isOnline ? '#4CAF50' : '#F44336'}">${isOnline ? 'Онлайн' : 'Оффлайн'}</span></div>
+        <div><strong>GitHub Token:</strong> <span style="color: ${githubToken ? '#4CAF50' : '#F44336'}">${tokenStatus}</span> (${tokenPreview})</div>
         <div><strong>Последняя синхронизация:</strong> ${lastSync}</div>
         <div><strong>Ожидают синхронизации:</strong> <span style="color: ${pendingSyncRequests.length > 0 ? '#FF9800' : '#4CAF50'}">${pendingSyncRequests.length} заявок</span></div>
         <div><strong>База оборудования:</strong> ${equipmentDatabase.length} записей (${dbDate})</div>
         <div><strong>Устройство:</strong> ${deviceId.substring(0, 15)}...</div>
+      </div>
+    </div>
+    
+    <div style="margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
+      <h3 style="color: #4CAF50; margin-top: 0;">Настройки GitHub</h3>
+      <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin-bottom: 15px;">
+        <div>
+          <strong>GitHub Token:</strong> ${tokenPreview}
+          <p style="font-size: 12px; color: #666; margin-top: 5px;">
+            Токен нужен для доступа к GitHub Gist. Создайте токен с правами gist 
+            <a href="https://github.com/settings/tokens" target="_blank" style="color: #2196F3;">здесь</a>.
+          </p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button onclick="window.manageGitHubToken()" 
+                  style="padding: 8px 15px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            ${githubToken ? 'Изменить токен' : 'Добавить токен'}
+          </button>
+          ${githubToken ? `
+            <button onclick="window.clearGitHubToken()" 
+                    style="padding: 8px 15px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              Удалить токен
+            </button>
+          ` : ''}
+        </div>
+      </div>
+      <div style="font-size: 13px; color: #666;">
+        <p><strong>Gist ID:</strong> ${GIST_ID}</p>
+        <p><strong>Файл данных:</strong> ${GIST_FILENAME}</p>
+        <p><strong>URL для проверки:</strong> <a href="${GIST_RAW_URL}" target="_blank">${GIST_RAW_URL}</a></p>
       </div>
     </div>
     
@@ -1651,7 +2064,7 @@ function generateDashboardHTML() {
         <div><strong>Заявок в этом месяце:</strong> ${stats.thisMonthRequests}</div>
         <div><strong>Завершено в этом месяце:</strong> ${stats.thisMonthCompleted}</div>
         <div><strong>База оборудования:</strong> ${equipmentDatabase.length} записей</div>
-        <div><strong>Пользователь:</strong> ${currentUser.name}</div>
+        <div><strong>Пользователь:</strong> ${currentUser.name} (${getRoleName(currentUser.type)})</div>
       </div>
     </div>
     
@@ -1925,6 +2338,13 @@ function updateSyncMessage() {
   if (!syncMessage || !syncMessageText) return;
   
   try {
+    if (!githubToken) {
+      syncMessageText.textContent = '⚠️ Для синхронизации требуется GitHub Token. Нажмите "🔄 Синхронизация" для настройки.';
+      syncMessage.className = 'sync-message warning';
+      syncMessage.style.display = 'block';
+      return;
+    }
+    
     if (pendingSyncRequests.length > 0) {
       syncMessageText.textContent = `⚠️ У вас есть ${pendingSyncRequests.length} заявок, ожидающих синхронизации. Нажмите кнопку "🔄 Синхронизация" для отправки на сервер.`;
       syncMessage.className = 'sync-message warning';
