@@ -1,4 +1,4 @@
-const CACHE_NAME = 'repair-journal-v3';
+const CACHE_NAME = 'repair-journal-v4';
 const urlsToCache = [
   './',
   './index.html',
@@ -12,22 +12,38 @@ const urlsToCache = [
 
 // Установка Service Worker
 self.addEventListener('install', event => {
-  console.log('[Service Worker] Установка...');
+  console.log('[Service Worker] Установка v4...');
+  
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[Service Worker] Кэширование файлов');
-        return cache.addAll(urlsToCache).catch(error => {
-          console.error('[Service Worker] Ошибка кэширования:', error);
-        });
+        console.log('[Service Worker] Кэширование файлов v4');
+        return Promise.all(
+          urlsToCache.map(url => {
+            return fetch(url, {cache: 'no-cache'})
+              .then(response => {
+                if (response.ok) {
+                  return cache.put(url, response);
+                }
+                console.log(`[Service Worker] Не удалось загрузить: ${url}`);
+              })
+              .catch(error => {
+                console.error(`[Service Worker] Ошибка кэширования ${url}:`, error);
+              });
+          })
+        );
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        console.log('[Service Worker] Пропуск ожидания активации');
+        return self.skipWaiting();
+      })
   );
 });
 
 // Активация Service Worker
 self.addEventListener('activate', event => {
-  console.log('[Service Worker] Активация...');
+  console.log('[Service Worker] Активация v4...');
+  
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
@@ -39,6 +55,7 @@ self.addEventListener('activate', event => {
         })
       );
     }).then(() => {
+      console.log('[Service Worker] Claiming clients');
       return self.clients.claim();
     })
   );
@@ -51,18 +68,21 @@ self.addEventListener('fetch', event => {
   // Пропускаем запросы к внешним ресурсам
   if (!url.origin.startsWith(self.location.origin) && 
       !url.href.includes('raw.githubusercontent.com') &&
-      !url.href.includes('githubusercontent.com')) {
+      !url.href.includes('githubusercontent.com') &&
+      !url.href.includes('corsproxy.io')) {
     return;
   }
   
-  // Для GitHub Raw URLs добавляем CORS заголовки
+  // Для GitHub Raw URLs и CORS proxy используем сеть напрямую
   if (url.href.includes('raw.githubusercontent.com') ||
-      url.href.includes('githubusercontent.com')) {
+      url.href.includes('githubusercontent.com') ||
+      url.href.includes('corsproxy.io')) {
     event.respondWith(
       fetch(event.request, {
         mode: 'cors',
         cache: 'no-cache'
-      }).catch(() => {
+      }).catch(error => {
+        console.error('[Service Worker] Ошибка загрузки внешнего ресурса:', error);
         return new Response('Ошибка загрузки внешнего ресурса', {
           status: 500,
           headers: { 'Content-Type': 'text/plain' }
@@ -72,41 +92,49 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Возвращаем кэшированный файл, если есть
-        if (response) {
-          console.log('[Service Worker] Возвращаем из кэша:', event.request.url);
+  // Для JavaScript файлов всегда загружаем из сети с проверкой обновлений
+  if (event.request.url.includes('.js') && !event.request.url.includes('service-worker.js')) {
+    event.respondWith(
+      fetch(event.request, {cache: 'no-store'})
+        .then(response => {
+          // Обновляем кэш
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseClone);
+          });
           return response;
-        }
-        
-        // Иначе загружаем из сети
-        return fetch(event.request)
+        })
+        .catch(() => {
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+  
+  // Стратегия Network First для остальных файлов
+  event.respondWith(
+    fetch(event.request)
+      .then(response => {
+        // Обновляем кэш
+        const responseClone = response.clone();
+        caches.open(CACHE_NAME).then(cache => {
+          cache.put(event.request, responseClone);
+        });
+        return response;
+      })
+      .catch(() => {
+        return caches.match(event.request)
           .then(response => {
-            // Проверяем валидность ответа
-            if (!response || response.status !== 200 || response.type === 'error') {
+            if (response) {
               return response;
             }
             
-            // Клонируем ответ
-            const responseToCache = response.clone();
-            
-            // Кэшируем новый ресурс
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
-            
-            return response;
-          })
-          .catch(error => {
-            console.error('[Service Worker] Ошибка fetch:', error);
             // Если страница не найдена, возвращаем 404.html
             if (event.request.mode === 'navigate') {
               return caches.match('./404.html');
             }
-            return new Response('Ошибка сети', {
+            
+            return new Response('Оффлайн или ошибка сети', {
               status: 503,
               headers: { 'Content-Type': 'text/plain' }
             });
@@ -118,6 +146,14 @@ self.addEventListener('fetch', event => {
 // Обработка сообщений
 self.addEventListener('message', event => {
   if (event.data === 'skipWaiting') {
+    console.log('[Service Worker] Получена команда skipWaiting');
     self.skipWaiting();
+  }
+  
+  if (event.data === 'updateCache') {
+    console.log('[Service Worker] Обновление кэша...');
+    caches.delete(CACHE_NAME).then(() => {
+      self.skipWaiting();
+    });
   }
 });
