@@ -761,5 +761,101 @@
     " title="Принудительное обновление">↻</button>
 
     <script src="javascript.js"></script>
+    
+    <script>
+        // Принудительное обновление приложения
+        function forceUpdate() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister();
+                    }
+                });
+            }
+            
+            caches.keys().then(function(cacheNames) {
+                return Promise.all(
+                    cacheNames.map(function(cacheName) {
+                        return caches.delete(cacheName);
+                    })
+                );
+            }).then(function() {
+                localStorage.clear();
+                sessionStorage.clear();
+                location.reload(true);
+            });
+        }
+
+        // Показываем кнопку принудительного обновления через 30 секунд
+        setTimeout(() => {
+            const loadingScreen = document.getElementById('loadingScreen');
+            if (loadingScreen && loadingScreen.style.display !== 'none') {
+                document.getElementById('forceUpdateBtn').style.display = 'block';
+            }
+        }, 30000);
+        
+        // Экстренный запуск приложения через 15 секунд
+        setTimeout(() => {
+            const loadingScreen = document.getElementById('loadingScreen');
+            const mainContainer = document.getElementById('mainContainer');
+            
+            if (loadingScreen && loadingScreen.style.display !== 'none') {
+                console.warn('Принудительный запуск приложения по таймауту');
+                loadingScreen.style.display = 'none';
+                if (mainContainer) {
+                    mainContainer.style.display = 'block';
+                }
+                showNotification('Приложение запущено в безопасном режиме', 'warning');
+                
+                // Создаем кнопку аварийного доступа
+                const emergencyAccess = document.createElement('div');
+                emergencyAccess.style.cssText = `
+                    text-align: center;
+                    padding: 20px;
+                    background: #fff3e0;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                `;
+                emergencyAccess.innerHTML = `
+                    <h3 style="color: #f57c00;">Аварийный доступ</h3>
+                    <p style="margin-bottom: 15px;">Если приложение не загружается, используйте эти кнопки:</p>
+                    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                        <button onclick="window.location.href='login.html'" 
+                                style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px;">
+                            Перейти к входу
+                        </button>
+                        <button onclick="forceUpdate()" 
+                                style="padding: 10px 20px; background: #ff9800; color: white; border: none; border-radius: 4px;">
+                            Очистить все данные
+                        </button>
+                    </div>
+                `;
+                
+                if (mainContainer) {
+                    mainContainer.prepend(emergencyAccess);
+                }
+            }
+        }, 15000);
+        
+        // Глобальная функция показа уведомлений
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            if (!notification) return;
+            
+            notification.textContent = message;
+            notification.className = 'notification ' + type;
+            
+            notification.style.display = 'block';
+            notification.style.opacity = '1';
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                    notification.style.opacity = '1';
+                }, 300);
+            }, 3000);
+        }
+    </script>
 </body>
 </html>
