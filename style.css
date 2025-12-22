@@ -952,3 +952,89 @@ tbody tr:hover {
     background-color: #fff3e0;
     border-left-color: #FF9800;
 }
+
+/* Добавить в конец файла style.css */
+
+/* Стили для поиска в селекте */
+.searchable-select-container {
+    position: relative;
+}
+
+#invNumberSearch {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    font-size: 14px;
+}
+
+#invNumberSearch:focus {
+    border-color: #4CAF50;
+    outline: none;
+}
+
+.clear-search-btn {
+    position: absolute;
+    right: 10px;
+    top: 8px;
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #999;
+    padding: 0;
+    line-height: 1;
+}
+
+.clear-search-btn:hover {
+    color: #333;
+}
+
+/* Стили для сообщения о синхронизации */
+.sync-status-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.sync-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.sync-dot.pending {
+    background-color: #FF9800;
+    animation: pulse 1s infinite;
+}
+
+.sync-dot.success {
+    background-color: #4CAF50;
+}
+
+.sync-dot.error {
+    background-color: #F44336;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Улучшение для мобильных устройств */
+@media (max-width: 768px) {
+    #invNumberSearch {
+        font-size: 16px;
+        padding: 10px;
+    }
+    
+    .clear-search-btn {
+        top: 10px;
+        right: 12px;
+        font-size: 24px;
+    }
+}
