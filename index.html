@@ -969,50 +969,49 @@
             }
         }
         
-        <script>
-// Проверка версии приложения
-const currentVersion = '4.1.0';
-const storedVersion = localStorage.getItem('app_version');
+        // Проверка версии приложения
+        const currentVersion = '4.1.0';
+        const storedVersion = localStorage.getItem('app_version');
 
-if (storedVersion !== currentVersion) {
-  console.log('Обновление приложения до версии', currentVersion);
-  
-  // Очищаем старые данные
-  const oldKeys = [
-    'repairRequests_v3', 'equipmentDatabase_v3', 'syncPendingRequests_v3',
-    'equipmentDBLastUpdated_v3', 'requestsLastUpdated_v3', 'lastSyncTime_v3',
-    'deviceId', 'lastSyncHash_v3', 'repairRequests_v4', 'equipmentDatabase_v4'
-  ];
-  
-  oldKeys.forEach(key => {
-    localStorage.removeItem(key);
-  });
-  
-  // Обновляем версию
-  localStorage.setItem('app_version', currentVersion);
-  
-  // Принудительно обновляем Service Worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(registrations => {
-      registrations.forEach(registration => {
-        registration.unregister();
-      });
-    }).then(() => {
-      if ('caches' in window) {
-        caches.keys().then(cacheNames => {
-          cacheNames.forEach(cacheName => {
-            caches.delete(cacheName);
-          });
-        });
-      }
-    }).then(() => {
-      console.log('Обновление завершено, перезагрузка...');
-      setTimeout(() => {
-        window.location.reload(true);
-      }, 1000);
-    });
-  }
-}
-</script>
+        if (storedVersion !== currentVersion) {
+            console.log('Обновление приложения до версии', currentVersion);
+            
+            // Очищаем старые данные
+            const oldKeys = [
+                'repairRequests_v3', 'equipmentDatabase_v3', 'syncPendingRequests_v3',
+                'equipmentDBLastUpdated_v3', 'requestsLastUpdated_v3', 'lastSyncTime_v3',
+                'deviceId', 'lastSyncHash_v3', 'repairRequests_v4', 'equipmentDatabase_v4'
+            ];
+            
+            oldKeys.forEach(key => {
+                localStorage.removeItem(key);
+            });
+            
+            // Обновляем версию
+            localStorage.setItem('app_version', currentVersion);
+            
+            // Принудительно обновляем Service Worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    registrations.forEach(registration => {
+                        registration.unregister();
+                    });
+                }).then(() => {
+                    if ('caches' in window) {
+                        caches.keys().then(cacheNames => {
+                            cacheNames.forEach(cacheName => {
+                                caches.delete(cacheName);
+                            });
+                        });
+                    }
+                }).then(() => {
+                    console.log('Обновление завершено, перезагрузка...');
+                    setTimeout(() => {
+                        window.location.reload(true);
+                    }, 1000);
+                });
+            }
+        }
+    </script>
 </body>
 </html>
