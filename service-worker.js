@@ -1,4 +1,4 @@
-const CACHE_NAME = 'repair-journal-v1';
+const CACHE_NAME = 'repair-journal-v3';
 const urlsToCache = [
   './',
   './index.html',
@@ -46,9 +46,29 @@ self.addEventListener('activate', event => {
 
 // Обработка запросов
 self.addEventListener('fetch', event => {
-  // Пропускаем запросы к внешним ресурсам и Chrome extensions
-  if (!event.request.url.startsWith(self.location.origin) || 
-      event.request.url.includes('chrome-extension://')) {
+  const url = new URL(event.request.url);
+  
+  // Пропускаем запросы к внешним ресурсам
+  if (!url.origin.startsWith(self.location.origin) && 
+      !url.href.includes('raw.githubusercontent.com') &&
+      !url.href.includes('githubusercontent.com')) {
+    return;
+  }
+  
+  // Для GitHub Raw URLs добавляем CORS заголовки
+  if (url.href.includes('raw.githubusercontent.com') ||
+      url.href.includes('githubusercontent.com')) {
+    event.respondWith(
+      fetch(event.request, {
+        mode: 'cors',
+        cache: 'no-cache'
+      }).catch(() => {
+        return new Response('Ошибка загрузки внешнего ресурса', {
+          status: 500,
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      })
+    );
     return;
   }
   
@@ -65,7 +85,7 @@ self.addEventListener('fetch', event => {
         return fetch(event.request)
           .then(response => {
             // Проверяем валидность ответа
-            if (!response || response.status !== 200 || response.type !== 'basic') {
+            if (!response || response.status !== 200 || response.type === 'error') {
               return response;
             }
             
@@ -86,7 +106,10 @@ self.addEventListener('fetch', event => {
             if (event.request.mode === 'navigate') {
               return caches.match('./404.html');
             }
-            return new Response('Ошибка сети');
+            return new Response('Ошибка сети', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain' }
+            });
           });
       })
   );
