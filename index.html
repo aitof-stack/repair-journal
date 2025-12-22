@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+    <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#4CAF50">
     <title>Журнал заявок на ремонт оборудования</title>
@@ -771,6 +771,24 @@
         </div>
     </div>
 
+    <!-- Кнопка принудительного обновления -->
+    <button id="forceUpdateBtn" onclick="forceUpdate()" style="
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #ff9800;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        font-size: 20px;
+        cursor: pointer;
+        z-index: 1000;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        display: none;
+    " title="Принудительное обновление">↻</button>
+
     <script src="javascript.js"></script>
     <script>
         // Регистрация Service Worker
@@ -779,7 +797,29 @@
                 navigator.serviceWorker.register('service-worker.js')
                     .then(function(registration) {
                         console.log('Service Worker зарегистрирован:', registration.scope);
-                        registration.update(); // Проверка обновлений
+                        
+                        // Проверяем обновления
+                        registration.update();
+                        
+                        // Слушаем обновления Service Worker
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            console.log('Найдено обновление Service Worker');
+                            
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed') {
+                                    if (navigator.serviceWorker.controller) {
+                                        console.log('Новый контент доступен, обновляем...');
+                                        showUpdateNotification();
+                                    }
+                                }
+                            });
+                        });
+                        
+                        // Проверяем, есть ли ожидающий Service Worker
+                        if (registration.waiting) {
+                            showUpdateNotification();
+                        }
                     })
                     .catch(function(error) {
                         console.log('Ошибка регистрации Service Worker:', error);
@@ -823,7 +863,7 @@
             
             try {
                 // Пытаемся получить количество ожидающих синхронизацию заявок
-                const pending = localStorage.getItem('syncPendingRequests_v3');
+                const pending = localStorage.getItem('syncPendingRequests_v4');
                 const pendingCount = pending ? JSON.parse(pending).length : 0;
                 
                 if (pendingCount > 0) {
@@ -831,7 +871,7 @@
                     syncMessage.className = 'sync-message warning';
                     syncMessage.style.display = 'block';
                 } else {
-                    const lastSync = localStorage.getItem('lastSyncTime_v3');
+                    const lastSync = localStorage.getItem('lastSyncTime_v4');
                     if (lastSync) {
                         const lastSyncDate = new Date(lastSync);
                         const now = new Date();
@@ -861,6 +901,121 @@
         
         // Обновляем сообщение о синхронизации при загрузке
         setTimeout(updateSyncMessage, 2000);
+        
+        // Показать уведомление об обновлении
+        function showUpdateNotification() {
+            const notification = document.getElementById('notification');
+            if (notification) {
+                notification.textContent = 'Доступно обновление приложения. Перезагрузите страницу.';
+                notification.className = 'notification info';
+                notification.style.display = 'block';
+                
+                // Показываем кнопку принудительного обновления
+                const forceUpdateBtn = document.getElementById('forceUpdateBtn');
+                if (forceUpdateBtn) {
+                    forceUpdateBtn.style.display = 'block';
+                }
+                
+                // Добавляем кнопку обновления на 5 секунд
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        // Функция принудительного обновления
+        function forceUpdate() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    registrations.forEach(registration => {
+                        console.log('Удаление Service Worker:', registration.scope);
+                        registration.unregister();
+                    });
+                }).then(() => {
+                    console.log('Очистка кэша...');
+                    if ('caches' in window) {
+                        return caches.keys().then(cacheNames => {
+                            return Promise.all(
+                                cacheNames.map(cacheName => {
+                                    console.log('Удаление кэша:', cacheName);
+                                    return caches.delete(cacheName);
+                                })
+                            );
+                        });
+                    }
+                }).then(() => {
+                    console.log('Очистка localStorage версий...');
+                    // Удаляем все версионные ключи
+                    const keysToRemove = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && (key.includes('_v') || key === 'app_version')) {
+                            keysToRemove.push(key);
+                        }
+                    }
+                    keysToRemove.forEach(key => {
+                        localStorage.removeItem(key);
+                    });
+                    
+                    console.log('Принудительная перезагрузка...');
+                    // Принудительная перезагрузка с очисткой кэша
+                    window.location.href = window.location.href + '?forceReload=' + Date.now();
+                }).catch(error => {
+                    console.error('Ошибка при обновлении:', error);
+                    window.location.reload(true);
+                });
+            } else {
+                window.location.reload(true);
+            }
+        }
+        
+        // Проверка версии приложения
+        const currentVersion = '4.0.1';
+        const storedVersion = localStorage.getItem('app_version');
+        
+        if (storedVersion !== currentVersion) {
+            console.log('Обновление приложения до версии', currentVersion);
+            
+            // Очищаем старые версии данных
+            const oldKeys = ['repairRequests_v3', 'equipmentDatabase_v3', 'syncPendingRequests_v3', 
+                           'equipmentDBLastUpdated_v3', 'requestsLastUpdated_v3', 'lastSyncTime_v3',
+                           'deviceId', 'lastSyncHash_v3'];
+            
+            oldKeys.forEach(key => {
+                localStorage.removeItem(key);
+            });
+            
+            // Обновляем версию в localStorage
+            localStorage.setItem('app_version', currentVersion);
+            
+            // Показываем уведомление об обновлении
+            setTimeout(() => {
+                const notification = document.getElementById('notification');
+                if (notification) {
+                    notification.textContent = `Приложение обновлено до версии ${currentVersion}`;
+                    notification.className = 'notification success';
+                    notification.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        notification.style.display = 'none';
+                    }, 3000);
+                }
+            }, 2000);
+        }
+        
+        // Обновляем Service Worker при каждом запуске
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({type: 'updateCache'});
+        }
+        
+        // Обновление Service Worker при возвращении на страницу
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && 'serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.update();
+                });
+            }
+        });
     </script>
 </body>
 </html>
