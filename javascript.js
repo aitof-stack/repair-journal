@@ -742,7 +742,7 @@ async function loadEquipmentDatabase(forceUpdate = false) {
     if (shouldUpdate && isOnline) {
       console.log('Загрузка базы оборудования...');
       
-      const response = await fetch(EQUIPMENT_DB_URL + '?t=' + Date.now());
+      const response = await fetch('data/equipment_database.csv?t=' + Date.now());
       
       if (!response.ok) {
         throw new Error(`Ошибка HTTP ${response.status}: ${response.statusText}`);
