@@ -700,39 +700,35 @@
                 navigator.serviceWorker.register('service-worker.js')
                     .then(function(registration) {
                         console.log('Service Worker зарегистрирован:', registration.scope);
-                        registration.update(); // Проверка обновлений
+                        registration.update();
                     })
                     .catch(function(error) {
                         console.log('Ошибка регистрации Service Worker:', error);
                     });
             });
         }
+    
+       // Проверка авторизации при загрузке
+       document.addEventListener('DOMContentLoaded', function() {
+           const loadingStatus = document.getElementById('loadingStatus');
+           loadingStatus.textContent = 'Проверка авторизации...';
         
-        // Проверка авторизации при загрузке
-        document.addEventListener('DOMContentLoaded', function() {
-            const loadingStatus = document.getElementById('loadingStatus');
-            loadingStatus.textContent = 'Проверка авторизации...';
+           setTimeout(function() {
+               const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
+               const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
             
-            setTimeout(function() {
-                // Используем правильные ключи localStorage
-                const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
-                const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
+               if (!isAuthenticated || !currentUser) {
+                   loadingStatus.textContent = 'Перенаправление на страницу входа...';
+                   window.location.href = 'login.html';
+               } else {
+                   document.getElementById('loadingScreen').style.display = 'none';
+                   document.getElementById('mainContainer').style.display = 'block';
                 
-                if (!isAuthenticated || !currentUser) {
-                    // Если не авторизован, перенаправляем на страницу входа
-                    loadingStatus.textContent = 'Перенаправление на страницу входа...';
-                    window.location.href = 'login.html';
-                } else {
-                    // Если авторизован, показываем контент
-                    document.getElementById('loadingScreen').style.display = 'none';
-                    document.getElementById('mainContainer').style.display = 'block';
-                    
-                    // Инициализируем приложение
-                    if (typeof initApp === 'function') {
-                        initApp();
-                    }
-                }
-            }, 1000);
+                   if (typeof initApp === 'function') {
+                       initApp();
+                   }
+               }
+           }, 1000);
         });
     </script>
 </body>
