@@ -812,48 +812,29 @@
             if (!syncMessage || !syncMessageText) return;
             
             try {
-                // Пытаемся получить количество ожидающих синхронизацию заявок
-                const pending = localStorage.getItem('syncPendingRequests_v3');
-                const pendingCount = pending ? JSON.parse(pending).length : 0;
-                
-                if (pendingCount > 0) {
-                    syncMessageText.textContent = `⚠️ У вас есть ${pendingCount} заявок, ожидающих синхронизации. Нажмите кнопку "🔄 Синхронизация" для отправки на сервер.`;
-                    syncMessage.className = 'sync-message warning';
-                    syncMessage.style.display = 'block';
-                } else {
-                    const lastSync = localStorage.getItem('lastSyncTime_v3');
-                    if (lastSync) {
-                        const lastSyncDate = new Date(lastSync);
-                        const now = new Date();
-                        const diffHours = Math.floor((now - lastSyncDate) / (1000 * 60 * 60));
-                        
-                        if (diffHours > 24) {
-                            syncMessageText.textContent = `🔄 Последняя синхронизация была ${diffHours} часов назад. Рекомендуется выполнить синхронизацию.`;
-                            syncMessage.className = 'sync-message';
-                            syncMessage.style.display = 'block';
-                        } else {
-                            syncMessage.style.display = 'none';
-                        }
-                    } else {
-                        syncMessageText.textContent = '🔄 Данные еще не синхронизировались. Нажмите кнопку "🔄 Синхронизация" для первой синхронизации.';
+                const lastSync = localStorage.getItem('lastSyncTime_v4');
+                if (lastSync) {
+                    const lastSyncDate = new Date(lastSync);
+                    const now = new Date();
+                    const diffHours = Math.floor((now - lastSyncDate) / (1000 * 60 * 60));
+                    
+                    if (diffHours > 24) {
+                        syncMessageText.textContent = `🔄 Последняя синхронизация была ${diffHours} часов назад. Нажмите кнопку "🔄 Синхронизация" для обновления базы оборудования.`;
                         syncMessage.className = 'sync-message';
                         syncMessage.style.display = 'block';
+                    } else {
+                        syncMessage.style.display = 'none';
                     }
+                } else {
+                    syncMessageText.textContent = '🔄 Для получения актуальной базы оборудования нажмите кнопку "🔄 Синхронизация".';
+                    syncMessage.className = 'sync-message';
+                    syncMessage.style.display = 'block';
                 }
             } catch (error) {
                 console.error('Ошибка при обновлении сообщения синхронизации:', error);
                 syncMessage.style.display = 'none';
             }
         }
-        
-        // Автоматическая проверка синхронизации каждые 30 минут
-        setInterval(function() {
-            if (window.isOnline) {
-                window.syncAllData().catch(() => {
-                    console.log('Автоматическая синхронизация не удалась');
-                });
-            }
-        }, 1800000); // 30 минут
         
         // Обновляем сообщение о синхронизации каждые 5 минут
         setInterval(updateSyncMessage, 300000);
