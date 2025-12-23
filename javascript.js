@@ -1,27 +1,22 @@
-// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С ЛОКАЛЬНОЙ СИНХРОНИЗАЦИЕЙ
+// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С FIREBASE СИНХРОНИЗАЦИЕЙ
 
 // Константы
-const APP_VERSION = '4.0.0';
-const APP_NAME = 'Ремонтный журнал';
+const APP_VERSION = '5.0.0';
+const APP_NAME = 'Ремонтный журнал (Firebase)';
 
 // Ссылки на GitHub для данных
 const GITHUB_REPO = 'aitof-stack/repair-journal';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/' + GITHUB_REPO + '/main/';
 const EQUIPMENT_DB_URL = GITHUB_RAW_URL + 'equipment_database.csv';
-const GITHUB_PAGES_URL = 'https://aitof-stack.github.io/repair-journal/';
 
 // Ключи для хранения данных
 const STORAGE_KEYS = {
-    EQUIPMENT_DB: 'equipmentDatabase_v4',
-    REPAIR_REQUESTS: 'repairRequests_v4',
+    EQUIPMENT_DB: 'equipmentDatabase_v5',
+    REPAIR_REQUESTS: 'repairRequests_v5',
     CURRENT_USER: 'repair_journal_currentUser',
     AUTH_STATUS: 'repair_journal_isAuthenticated',
-    DB_LAST_UPDATED: 'equipmentDBLastUpdated_v4',
-    REQUESTS_LAST_UPDATED: 'requestsLastUpdated_v4',
-    LAST_SYNC_TIME: 'lastSyncTime_v4',
-    SYNC_DATA: 'syncData_v4',
-    DEVICE_ID: 'deviceId_v4',
-    DELETED_REQUESTS: 'deletedRequests_v4'
+    DB_LAST_UPDATED: 'equipmentDBLastUpdated_v5',
+    DEVICE_ID: 'deviceId_v5'
 };
 
 // Переменные приложения
@@ -30,9 +25,14 @@ let repairRequests = [];
 let currentUser = null;
 let isOnline = navigator.onLine;
 let isDBLoading = false;
-let syncInProgress = false;
 let deviceId = null;
-let deletedRequests = [];
+
+// Firebase переменные
+let firebaseApp = null;
+let firestore = null;
+let auth = null;
+let firestoreUnsubscribe = null;
+let isFirebaseInitialized = false;
 
 // DOM элементы
 let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
@@ -60,38 +60,12 @@ document.addEventListener('DOMContentLoaded', function() {
     deviceId = generateDeviceId();
     console.log('Device ID:', deviceId);
     
-    // Загружаем список удаленных заявок
-    loadDeletedRequests();
-    
     // Проверяем авторизацию
     checkAuthAndInit();
 });
 
-// Загрузить список удаленных заявок
-function loadDeletedRequests() {
-    try {
-        const deleted = localStorage.getItem(STORAGE_KEYS.DELETED_REQUESTS);
-        if (deleted) {
-            deletedRequests = JSON.parse(deleted) || [];
-            console.log('Загружено удаленных заявок:', deletedRequests.length);
-        }
-    } catch (error) {
-        console.error('Ошибка загрузки удаленных заявок:', error);
-        deletedRequests = [];
-    }
-}
-
-// Сохранить список удаленных заявок
-function saveDeletedRequests() {
-    try {
-        localStorage.setItem(STORAGE_KEYS.DELETED_REQUESTS, JSON.stringify(deletedRequests));
-    } catch (error) {
-        console.error('Ошибка сохранения удаленных заявок:', error);
-    }
-}
-
 // Проверка авторизации и инициализация
-function checkAuthAndInit() {
+async function checkAuthAndInit() {
     const isAuthenticated = localStorage.getItem(STORAGE_KEYS.AUTH_STATUS);
     const savedUser = JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER));
     
@@ -104,73 +78,216 @@ function checkAuthAndInit() {
     console.log(`Пользователь: ${currentUser.name} (${currentUser.type})`);
     
     // Инициализация приложения
-    initApp();
+    await initApp();
 }
 
 // Основная функция инициализации
-function initApp() {
+async function initApp() {
     console.log(`${APP_NAME} v${APP_VERSION}`);
+    const loadingScreen = document.getElementById('loadingScreen');
+    const loadingStatus = document.getElementById('loadingStatus');
+    
+    try {
+        // 1. Инициализация Firebase
+        loadingStatus.textContent = 'Инициализация Firebase...';
+        isFirebaseInitialized = await initializeFirebase();
+        
+        // 2. Инициализация интерфейса
+        initDOMElements();
+        setupRoleBasedUI();
+        showUserInfo();
+        setupInterface();
+        checkConnection();
+        setupSearchableSelect();
+        
+        // 3. Загрузка данных
+        if (isFirebaseInitialized) {
+            loadingStatus.textContent = 'Подключение к облачной базе...';
+            await loadRepairRequestsFromFirebase();
+        } else {
+            loadingStatus.textContent = 'Облако недоступно, загрузка локальных данных...';
+            await loadRepairRequestsFromLocal();
+            showNotification('Работа в автономном режиме. Данные не синхронизируются.', 'warning');
+        }
+        
+        loadingStatus.textContent = 'Загрузка базы оборудования...';
+        await loadEquipmentDatabase();
+        
+        // 4. Применение фильтров
+        applyFilters();
+        
+    } catch (error) {
+        console.error('Ошибка инициализации:', error);
+        showNotification('Ошибка загрузки приложения', 'error');
+    }
     
     // Скрываем экран загрузки
-    const loadingScreen = document.getElementById('loadingScreen');
-    if (loadingScreen) {
-        setTimeout(() => {
+    setTimeout(() => {
+        if (loadingScreen) {
             loadingScreen.style.display = 'none';
-        }, 500);
-    }
+        }
+        
+        const mainContainer = document.getElementById('mainContainer');
+        if (mainContainer) {
+            mainContainer.style.display = 'block';
+        }
+    }, 500);
     
-    // Показываем основной контейнер
-    const mainContainer = document.getElementById('mainContainer');
-    if (mainContainer) {
-        mainContainer.style.display = 'block';
-    }
-    
-    // Инициализация DOM элементов
-    initDOMElements();
-    
-    // Настройка интерфейса по роли
-    setupRoleBasedUI();
-    
-    // Показать информацию о пользователе
-    showUserInfo();
-    
-    // Загрузка данных
-    loadAllData();
-    
-    // Настройка интерфейса
-    setupInterface();
-    
-    // Проверка соединения
-    checkConnection();
-    
-    // Настройка поиска в выпадающем списке
-    setupSearchableSelect();
-    
-    // Запуск автоматической синхронизации
-    startAutoSync();
-    
-    console.log('Приложение успешно запущено');
+    console.log('Приложение успешно запущено. Firebase:', isFirebaseInitialized ? 'ONLINE' : 'OFFLINE');
 }
 
-// Начать автоматическую синхронизацию
-function startAutoSync() {
-    // Синхронизация при запуске если онлайн
-    if (isOnline) {
-        setTimeout(() => {
-            window.syncAllData().catch(() => {
-                console.log('Автоматическая синхронизация при запуске не удалась');
-            });
-        }, 3000);
+// Инициализация Firebase
+async function initializeFirebase() {
+    try {
+        // Проверяем наличие Firebase в глобальной области
+        if (typeof firebase === 'undefined') {
+            console.error('Firebase не загружен');
+            return false;
+        }
+        
+        // Инициализация Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyAdOqQX31vCcj7OXVyNSQX_nRUijAGOVKM",
+            authDomain: "repair-journal-eadf1.firebaseapp.com",
+            projectId: "repair-journal-eadf1",
+            storageBucket: "repair-journal-eadf1.firebasestorage.app",
+            messagingSenderId: "525057868534",
+            appId: "1:525057868534:web:372b03243b0bc34b31e2d7"
+        };
+        
+        firebaseApp = firebase.initializeApp(firebaseConfig);
+        firestore = firebase.firestore();
+        auth = firebase.auth();
+        
+        // Анонимная авторизация
+        await auth.signInAnonymously();
+        console.log('Firebase инициализирован. User:', auth.currentUser?.uid);
+        
+        return true;
+    } catch (error) {
+        console.error('Ошибка инициализации Firebase:', error);
+        return false;
+    }
+}
+
+// ============ ФИРБАС ФУНКЦИИ ============
+
+// Загрузка заявок из Firebase
+async function loadRepairRequestsFromFirebase() {
+    if (!firestore) return;
+    
+    try {
+        console.log('Загрузка данных из Firestore...');
+        
+        // Загружаем все заявки
+        const snapshot = await firestore.collection('repair_requests')
+            .orderBy('createdAt', 'desc')
+            .get();
+        
+        repairRequests = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        
+        // Сохраняем локально для офлайн работы
+        localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+        
+        console.log('Загружено заявок из Firestore:', repairRequests.length);
+        
+        // Настраиваем подписку на обновления в реальном времени
+        setupFirestoreRealtimeListener();
+        
+        // Обновляем интерфейс
+        renderRepairTable();
+        updateSummary();
+        
+        return true;
+    } catch (error) {
+        console.error('Ошибка загрузки из Firebase:', error);
+        return false;
+    }
+}
+
+// Настройка подписки на обновления в реальном времени
+function setupFirestoreRealtimeListener() {
+    if (!firestore) return;
+    
+    // Отменяем предыдущую подписку
+    if (firestoreUnsubscribe) {
+        firestoreUnsubscribe();
     }
     
-    // Синхронизация каждые 5 минут если онлайн
-    setInterval(() => {
-        if (isOnline && !syncInProgress) {
-            window.syncAllData().catch(() => {
-                console.log('Периодическая синхронизация не удалась');
+    firestoreUnsubscribe = firestore.collection('repair_requests')
+        .orderBy('createdAt', 'desc')
+        .onSnapshot((snapshot) => {
+            const requests = [];
+            snapshot.docChanges().forEach((change) => {
+                const data = change.doc.data();
+                const request = {
+                    id: change.doc.id,
+                    ...data
+                };
+                
+                if (change.type === 'added' || change.type === 'modified') {
+                    // Находим индекс существующей заявки
+                    const existingIndex = requests.findIndex(r => r.id === request.id);
+                    if (existingIndex >= 0) {
+                        requests[existingIndex] = request;
+                    } else {
+                        requests.push(request);
+                    }
+                } else if (change.type === 'removed') {
+                    // Удаляем заявку
+                    const index = requests.findIndex(r => r.id === change.doc.id);
+                    if (index >= 0) {
+                        requests.splice(index, 1);
+                    }
+                }
             });
-        }
-    }, 300000); // 5 минут
+            
+            // Получаем полный список
+            const allRequests = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            
+            repairRequests = allRequests;
+            
+            // Сохраняем локально
+            localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+            
+            // Обновляем интерфейс
+            renderRepairTable();
+            updateSummary();
+            applyFilters();
+            
+            console.log('Данные обновлены в реальном времени. Заявок:', repairRequests.length);
+            
+        }, (error) => {
+            console.error('Ошибка подписки Firestore:', error);
+            showNotification('Ошибка синхронизации с облаком', 'error');
+        });
+}
+
+// Загрузка локальных данных (офлайн режим)
+async function loadRepairRequestsFromLocal() {
+    try {
+        console.log('Загрузка локальных данных...');
+        
+        const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
+        repairRequests = localRequests;
+        
+        console.log('Загружено локальных заявок:', repairRequests.length);
+        
+        renderRepairTable();
+        updateSummary();
+        
+        return true;
+    } catch (error) {
+        console.error('Ошибка загрузки локальных данных:', error);
+        repairRequests = [];
+        return false;
+    }
 }
 
 // Инициализация DOM элементов
@@ -266,6 +383,16 @@ function getRoleName(roleType) {
 // Выход из системы
 window.logout = function() {
     if (confirm('Вы уверены, что хотите выйти?')) {
+        // Отписываемся от обновлений
+        if (firestoreUnsubscribe) {
+            firestoreUnsubscribe();
+        }
+        
+        // Выход из Firebase
+        if (auth) {
+            auth.signOut();
+        }
+        
         localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
         localStorage.removeItem(STORAGE_KEYS.AUTH_STATUS);
         redirectToLogin();
@@ -276,34 +403,25 @@ window.logout = function() {
 window.syncAllData = async function() {
     if (!checkAuth()) return;
     
-    if (syncInProgress) {
-        showNotification('Синхронизация уже выполняется...', 'warning');
+    if (!isFirebaseInitialized) {
+        showNotification('Firebase не инициализирован. Проверьте соединение.', 'error');
         return;
     }
     
-    syncInProgress = true;
-    showNotification('Начата синхронизация данных...', 'info');
+    showNotification('Синхронизация данных...', 'info');
     
     try {
-        // 1. Сначала обновляем базу оборудования
+        // Перезагружаем данные из Firebase
+        await loadRepairRequestsFromFirebase();
+        
+        // Обновляем базу оборудования
         await loadEquipmentDatabase(true);
         
-        // 2. Обновляем интерфейс
-        renderRepairTable();
-        updateSummary();
-        updateDBButtonInfo();
-        
-        // 3. Показываем результат
         showNotification('Синхронизация завершена успешно!', 'success');
-        
-        // 4. Сохраняем время последней синхронизации
-        localStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, new Date().toISOString());
         
     } catch (error) {
         console.error('Ошибка синхронизации:', error);
         showNotification('Ошибка синхронизации: ' + error.message, 'error');
-    } finally {
-        syncInProgress = false;
     }
 };
 
@@ -357,10 +475,10 @@ window.exportRepairData = function() {
         return;
     }
     
-    let csvContent = "Дата;Время;Автор;Участок;Инв.номер;Оборудование;Модель;Номер станка;Неисправность;Дата окончания;Время окончания;Статус;Кол-во простоев;Время простоя;Номенклатура\n";
+    let csvContent = "ID;Дата;Время;Автор;Участок;Инв.номер;Оборудование;Модель;Номер станка;Неисправность;Дата окончания;Время окончания;Статус;Кол-во простоев;Время простоя;Номенклатура;Создано;Обновлено\n";
     
     repairRequests.forEach(request => {
-        csvContent += `"${request.date || ''}";"${request.time || ''}";"${request.author || ''}";"${request.location || ''}";"${request.invNumber || ''}";"${request.equipmentName || ''}";"${request.model || ''}";"${request.machineNumber || ''}";"${request.faultDescription || ''}";"${request.repairEndDate || ''}";"${request.repairEndTime || ''}";"${request.status || ''}";"${request.downtimeCount || 0}";"${request.downtimeHours || 0}";"${request.productionItem || ''}"\n`;
+        csvContent += `"${request.id || ''}";"${request.date || ''}";"${request.time || ''}";"${request.author || ''}";"${request.location || ''}";"${request.invNumber || ''}";"${request.equipmentName || ''}";"${request.model || ''}";"${request.machineNumber || ''}";"${request.faultDescription || ''}";"${request.repairEndDate || ''}";"${request.repairEndTime || ''}";"${request.status || ''}";"${request.downtimeCount || 0}";"${request.downtimeHours || 0}";"${request.productionItem || ''}";"${request.createdAt || ''}";"${request.updatedAt || ''}"\n`;
     });
     
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -419,7 +537,7 @@ window.deleteRequest = async function(id) {
         return;
     }
     
-    if (!confirm('Вы уверены, что хотите удалить эту заявку?\n\nУдаление приведет к полному удалению заявки на всех устройствах при синхронизации.')) {
+    if (!confirm('Вы уверены, что хотите удалить эту заявку?\n\nЗаявка будет удалена для всех пользователей.')) {
         return;
     }
     
@@ -430,33 +548,22 @@ window.deleteRequest = async function(id) {
             return;
         }
         
-        // Добавляем ID в список удаленных
-        if (!deletedRequests.includes(id)) {
-            deletedRequests.push(id);
-            saveDeletedRequests();
-        }
-        
-        // Удаляем локально
-        repairRequests = repairRequests.filter(req => req.id !== id);
-        localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
-        
-        renderRepairTable();
-        updateSummary();
-        
-        showNotification('Заявка удалена', 'success');
-        
-        // Если онлайн, пытаемся синхронизировать
-        if (isOnline) {
-            setTimeout(() => {
-                window.syncAllData().catch(() => {
-                    console.log('Синхронизация не удалась');
-                });
-            }, 1000);
+        // Удаляем из Firebase если онлайн
+        if (isFirebaseInitialized && firestore) {
+            await firestore.collection('repair_requests').doc(id).delete();
+            showNotification('Заявка удалена из облака', 'success');
+        } else {
+            // Удаляем локально
+            repairRequests = repairRequests.filter(req => req.id !== id);
+            localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+            renderRepairTable();
+            updateSummary();
+            showNotification('Заявка удалена локально', 'success');
         }
         
     } catch (error) {
         console.error('Ошибка при удалении заявки:', error);
-        showNotification('Ошибка при удалении заявки', 'error');
+        showNotification('Ошибка при удалении заявки: ' + error.message, 'error');
     }
 };
 
@@ -503,7 +610,7 @@ window.completeRequest = async function(id) {
         return;
     }
     
-    // Обновляем заявку
+    // Обновляем локально
     request.status = 'completed';
     request.repairEndDate = repairEndDate;
     request.repairEndTime = repairEndTime;
@@ -512,10 +619,29 @@ window.completeRequest = async function(id) {
     request.updatedAt = new Date().toISOString();
     request.completedBy = currentUser.name;
     
-    // Сохраняем локально
     localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
     
-    showNotification('Ремонт завершен!', 'success');
+    // Обновляем в Firebase если онлайн
+    if (isFirebaseInitialized && firestore) {
+        try {
+            await firestore.collection('repair_requests').doc(id).update({
+                status: 'completed',
+                repairEndDate: repairEndDate,
+                repairEndTime: repairEndTime,
+                downtimeCount: parseInt(downtimeCount) || 1,
+                downtimeHours: downtimeHours,
+                updatedAt: new Date().toISOString(),
+                completedBy: currentUser.name
+            });
+            
+            showNotification('Ремонт завершен и синхронизирован!', 'success');
+        } catch (error) {
+            console.error('Ошибка обновления в Firebase:', error);
+            showNotification('Ремонт завершен локально', 'warning');
+        }
+    } else {
+        showNotification('Ремонт завершен локально', 'success');
+    }
     
     renderRepairTable();
     updateSummary();
@@ -528,13 +654,13 @@ async function loadAllData() {
     try {
         showNotification('Загрузка данных...', 'info');
         
-        // Загружаем параллельно
-        await Promise.allSettled([
-            loadEquipmentDatabase(),
-            loadRepairRequests()
-        ]);
+        if (isFirebaseInitialized) {
+            await loadRepairRequestsFromFirebase();
+        } else {
+            await loadRepairRequestsFromLocal();
+        }
         
-        applyFilters();
+        await loadEquipmentDatabase();
         
         setTimeout(() => {
             const notification = document.getElementById('notification');
@@ -639,31 +765,6 @@ async function loadEquipmentDatabase(forceUpdate = false) {
     updateDBButtonInfo();
     
     return equipmentDatabase.length;
-}
-
-// Загрузка заявок
-async function loadRepairRequests() {
-    try {
-        console.log('Загрузка заявок...');
-        
-        // Загружаем локальные данные
-        const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
-        
-        // Фильтруем удаленные заявки
-        const filteredRequests = localRequests.filter(request => !deletedRequests.includes(request.id));
-        
-        repairRequests = filteredRequests;
-        localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
-        
-        console.log('Всего заявок после загрузки:', repairRequests.length);
-        
-    } catch (error) {
-        console.error('Ошибка загрузки заявок:', error);
-        repairRequests = [];
-    }
-    
-    renderRepairTable();
-    updateSummary();
 }
 
 // Парсинг CSV
@@ -999,6 +1100,18 @@ function addEventListeners() {
         isOnline = true;
         showNotification('Соединение восстановлено', 'success');
         checkConnection();
+        
+        // Пробуем переподключиться к Firebase
+        if (!isFirebaseInitialized) {
+            setTimeout(() => {
+                initializeFirebase().then(success => {
+                    if (success) {
+                        loadRepairRequestsFromFirebase();
+                        showNotification('Подключено к облачной базе', 'success');
+                    }
+                });
+            }, 2000);
+        }
     });
     
     window.addEventListener('offline', () => {
@@ -1089,11 +1202,9 @@ async function handleFormSubmit(e) {
         updateSummary();
         clearForm();
         
-        showNotification('Заявка успешно добавлена!', 'success');
-        
     } catch (error) {
         console.error('Ошибка при добавлении заявки:', error);
-        showNotification('Ошибка при добавлении заявки', 'error');
+        showNotification('Ошибка при добавлении заявки: ' + error.message, 'error');
     }
 }
 
@@ -1124,7 +1235,7 @@ function createRequestFromForm() {
     }
     
     return {
-        id: Date.now() + Math.floor(Math.random() * 1000),
+        id: Date.now().toString(), // Временный ID
         date: document.getElementById('date')?.value || '',
         time: document.getElementById('time')?.value || '',
         author: authorName,
@@ -1140,15 +1251,40 @@ function createRequestFromForm() {
         productionItem: document.getElementById('productionItem')?.value || '-',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        createdBy: currentUser.name
+        createdBy: currentUser.name,
+        deviceId: deviceId
     };
 }
 
-// Добавить заявку
+// Добавить заявку (в Firebase)
 async function addRepairRequest(request) {
-    // Добавляем локально
+    // Добавляем локально для быстрого отклика
     repairRequests.push(request);
     localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+    
+    showNotification('Заявка добавляется...', 'info');
+    
+    // Сохраняем в Firebase если онлайн
+    if (isFirebaseInitialized && firestore) {
+        try {
+            // Удаляем временный ID, Firebase создаст свой
+            const requestToSave = { ...request };
+            delete requestToSave.id;
+            
+            // Добавляем в Firebase
+            const docRef = await firestore.collection('repair_requests').add(requestToSave);
+            console.log('Заявка сохранена в Firebase с ID:', docRef.id);
+            
+            // Обновление придет через onSnapshot, поэтому не обновляем здесь
+            showNotification('Заявка успешно добавлена и синхронизирована!', 'success');
+            
+        } catch (error) {
+            console.error('Ошибка сохранения в Firebase:', error);
+            showNotification('Заявка добавлена локально. Ошибка синхронизации.', 'warning');
+        }
+    } else {
+        showNotification('Заявка добавлена локально', 'success');
+    }
     
     return request;
 }
@@ -1247,7 +1383,7 @@ function renderRepairTable(filteredRequests = null) {
         emptyRow.innerHTML = `
             <td colspan="15" style="text-align: center; padding: 30px; color: #666;">
                 <strong>Нет заявок на ремонт</strong>
-                <p style="margin: 5px 0 0 0; font-size: 14px;">Создайте первую заявку</p>
+                <p style="margin: 5px 0 0 0; font-size: 14px;">${isFirebaseInitialized ? 'Создайте первую заявку' : 'Ожидание подключения к облаку...'}</p>
             </td>
         `;
         repairTableBody.appendChild(emptyRow);
@@ -1283,12 +1419,12 @@ function renderRepairTable(filteredRequests = null) {
         let actionButtons = '';
         
         if (currentUser && currentUser.type === 'admin') {
-            actionButtons += `<button class="btn-delete" onclick="deleteRequest(${request.id})" title="Удалить">Удалить</button>`;
+            actionButtons += `<button class="btn-delete" onclick="deleteRequest('${request.id}')" title="Удалить">Удалить</button>`;
         }
         
         if (request.status === 'pending' && currentUser && 
             (currentUser.type === 'admin' || currentUser.type === 'repair')) {
-            actionButtons += `<button class="btn-complete" onclick="completeRequest(${request.id})" title="Завершить ремонт">Завершить</button>`;
+            actionButtons += `<button class="btn-complete" onclick="completeRequest('${request.id}')" title="Завершить ремонт">Завершить</button>`;
         }
         
         if (!actionButtons) {
@@ -1399,8 +1535,6 @@ function applyFilters() {
 // Генерация HTML дашборда
 function generateDashboardHTML() {
     const stats = calculateDashboardStats();
-    const lastSyncTime = localStorage.getItem(STORAGE_KEYS.LAST_SYNC_TIME);
-    const lastSync = lastSyncTime ? new Date(lastSyncTime).toLocaleString('ru-RU') : 'никогда';
     
     return `
         <div class="dashboard-stats">
@@ -1432,9 +1566,9 @@ function generateDashboardHTML() {
         <div style="margin-top: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
             <h3 style="color: #4CAF50; margin-top: 0;">Статус синхронизации</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
-                <div><strong>Статус:</strong> <span style="color: ${isOnline ? '#4CAF50' : '#F44336'}">${isOnline ? 'Онлайн' : 'Оффлайн'}</span></div>
-                <div><strong>Последняя синхронизация:</strong> ${lastSync}</div>
-                <div><strong>Удалено заявок:</strong> ${deletedRequests.length}</div>
+                <div><strong>Статус Firebase:</strong> <span style="color: ${isFirebaseInitialized ? '#4CAF50' : '#F44336'}">${isFirebaseInitialized ? 'ПОДКЛЮЧЕНО' : 'ОФФЛАЙН'}</span></div>
+                <div><strong>Заявок в облаке:</strong> ${repairRequests.length}</div>
+                <div><strong>База оборудования:</strong> ${equipmentDatabase.length} записей</div>
                 <div><strong>Устройство:</strong> ${deviceId.substring(0, 15)}...</div>
             </div>
         </div>
@@ -1446,8 +1580,7 @@ function generateDashboardHTML() {
                 <div><strong>Эффективность:</strong> ${stats.efficiency}% завершено вовремя</div>
                 <div><strong>Заявок в этом месяце:</strong> ${stats.thisMonthRequests}</div>
                 <div><strong>Завершено в этом месяце:</strong> ${stats.thisMonthCompleted}</div>
-                <div><strong>База оборудования:</strong> ${equipmentDatabase.length} записей</div>
-                <div><strong>Пользователь:</strong> ${currentUser.name}</div>
+                <div><strong>Пользователь:</strong> ${currentUser.name} (${getRoleName(currentUser.type)})</div>
             </div>
         </div>
         
@@ -1521,7 +1654,7 @@ function generateDashboardHTML() {
         
         <div style="margin-top: 30px; font-size: 12px; color: #666; text-align: center;">
             Данные обновлены: ${new Date().toLocaleString('ru-RU')}<br>
-            Приложение: ${APP_NAME} v${APP_VERSION} | Устройство: ${deviceId.substring(0, 10)}...
+            Приложение: ${APP_NAME} v${APP_VERSION} | Режим: ${isFirebaseInitialized ? 'ОНЛАЙН (синхронизация)' : 'ОФФЛАЙН (локально)'}
         </div>
     `;
 }
@@ -1610,7 +1743,7 @@ function checkConnection() {
     const connectionStatus = document.getElementById('connectionStatus');
     if (connectionStatus) {
         if (isOnline) {
-            connectionStatus.textContent = 'Онлайн';
+            connectionStatus.textContent = isFirebaseInitialized ? 'Онлайн (синхронизация)' : 'Онлайн (локально)';
             connectionStatus.className = 'connection-status';
         } else {
             connectionStatus.textContent = 'Оффлайн';
@@ -1641,6 +1774,11 @@ function showNotification(message, type = 'info') {
 
 // Перенаправление на страницу входа
 function redirectToLogin() {
+    // Отписываемся от обновлений Firebase перед переходом
+    if (firestoreUnsubscribe) {
+        firestoreUnsubscribe();
+    }
+    
     setTimeout(() => {
         window.location.href = 'login.html';
     }, 1000);
