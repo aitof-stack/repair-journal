@@ -1,12 +1,5 @@
-<script type="module">
-  // firebase-config.js
-
-// Импорт функций из Modular SDK (версия 10.x)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-// Конфигурация вашего проекта (замените на свою!)
+// firebase-config.js
+// Конфигурация Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyAdOqQX31vCcj7OXVyNSQX_nRUijAGOVKM",
     authDomain: "repair-journal-eadf1.firebaseapp.com",
@@ -17,26 +10,28 @@ const firebaseConfig = {
 };
 
 // Инициализация Firebase
-const firebaseApp = initializeApp(firebaseConfig);
+firebase.initializeApp(firebaseConfig);
 
 // Инициализация сервисов
-const db = getFirestore(firebaseApp); // База данных Firestore
-const auth = getAuth(firebaseApp);    // Модуль аутентификации
+const firebaseApp = firebase.app();
+const db = firebase.firestore();
+const auth = firebase.auth();
 
-// Функция для анонимного входа (требуется правилами безопасности Firestore)
+// Функция для анонимного входа
 async function loginToFirebase() {
     try {
-        await signInAnonymously(auth);
+        await auth.signInAnonymously();
         console.log("Анонимный вход в Firebase выполнен. UID:", auth.currentUser?.uid);
     } catch (error) {
         console.error("Ошибка анонимного входа в Firebase:", error);
     }
 }
 
-// Экспорт всего необходимого
-export { 
-    firebaseApp, db, auth, 
-    collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy,
-    loginToFirebase 
-};
-</script>
+// Делаем необходимые объекты глобально доступными
+window.firebaseApp = firebaseApp;
+window.db = db;
+window.auth = auth;
+window.loginToFirebase = loginToFirebase;
+
+// Также экспортируем функции firestore, чтобы не писать каждый раз firebase.firestore.
+// Но в javascript.js мы будем использовать глобальные переменные.
