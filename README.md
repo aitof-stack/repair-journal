@@ -8,6 +8,26 @@
 - Фильтрация и поиск заявок
 - Экспорт данных
 - Адаптивный дизайн для мобильных устройств
+- Синхронизация данных между устройствами
+
+## Настройка синхронизации:
+
+### 1. Создание GitHub Gist для хранения заявок:
+1. Перейдите на https://gist.github.com/
+2. Создайте новый Gist с названием "repair_requests"
+3. Добавьте файл `repair_requests.json` с содержимым: `[]`
+4. Сохраните Gist и получите его ID из URL (например: `https://gist.github.com/username/1234567890abcdef`)
+
+### 2. Настройка токена GitHub:
+1. Перейдите в Settings -> Developer settings -> Personal access tokens -> Tokens (classic)
+2. Создайте новый токен с правами `gist`
+3. Скопируйте токен и вставьте в файл `javascript.js` в константу `GITHUB_TOKEN`
+
+### 3. Настройка URL в коде:
+В файле `javascript.js` обновите константы:
+```javascript
+const GITHUB_TOKEN = 'ваш_токен_здесь';
+const REPAIR_REQUESTS_URL = 'https://gist.githubusercontent.com/ваш_username/ваш_gist_id/raw/repair_requests.json';
 
 ## Создание иконок:
 
