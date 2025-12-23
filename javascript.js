@@ -1,27 +1,27 @@
-// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С АВТОМАТИЧЕСКОЙ СИНХРОНИЗАЦИЕЙ
+// ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С ЛОКАЛЬНОЙ СИНХРОНИЗАЦИЕЙ
 
 // Константы
-const APP_VERSION = '3.3.0';
+const APP_VERSION = '4.0.0';
 const APP_NAME = 'Ремонтный журнал';
 
 // Ссылки на GitHub для данных
 const GITHUB_REPO = 'aitof-stack/repair-journal';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/' + GITHUB_REPO + '/main/';
 const EQUIPMENT_DB_URL = GITHUB_RAW_URL + 'equipment_database.csv';
-const REPAIR_REQUESTS_URL = 'https://gist.githubusercontent.com/aitof-stack/8bbf9c8c3d6f8a3c2e1d5f8b7a6c4e3d/raw/repair_requests.json';
 const GITHUB_PAGES_URL = 'https://aitof-stack.github.io/repair-journal/';
 
 // Ключи для хранения данных
 const STORAGE_KEYS = {
-    EQUIPMENT_DB: 'equipmentDatabase_v3',
-    REPAIR_REQUESTS: 'repairRequests_v3',
+    EQUIPMENT_DB: 'equipmentDatabase_v4',
+    REPAIR_REQUESTS: 'repairRequests_v4',
     CURRENT_USER: 'repair_journal_currentUser',
     AUTH_STATUS: 'repair_journal_isAuthenticated',
-    DB_LAST_UPDATED: 'equipmentDBLastUpdated_v3',
-    REQUESTS_LAST_UPDATED: 'requestsLastUpdated_v3',
-    LAST_SYNC_TIME: 'lastSyncTime_v3',
-    SYNC_PENDING: 'syncPendingRequests_v3',
-    DEVICE_ID: 'deviceId'
+    DB_LAST_UPDATED: 'equipmentDBLastUpdated_v4',
+    REQUESTS_LAST_UPDATED: 'requestsLastUpdated_v4',
+    LAST_SYNC_TIME: 'lastSyncTime_v4',
+    SYNC_DATA: 'syncData_v4',
+    DEVICE_ID: 'deviceId_v4',
+    DELETED_REQUESTS: 'deletedRequests_v4'
 };
 
 // Переменные приложения
@@ -31,8 +31,8 @@ let currentUser = null;
 let isOnline = navigator.onLine;
 let isDBLoading = false;
 let syncInProgress = false;
-let pendingSyncRequests = [];
 let deviceId = null;
+let deletedRequests = [];
 
 // DOM элементы
 let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
@@ -55,39 +55,38 @@ function generateDeviceId() {
 // Запуск при загрузке DOM
 document.addEventListener('DOMContentLoaded', function() {
     console.log(`${APP_NAME} v${APP_VERSION} запускается...`);
-    console.log('URL:', window.location.href);
     
     // Генерируем ID устройства
     deviceId = generateDeviceId();
     console.log('Device ID:', deviceId);
     
-    // Загружаем ожидающие синхронизацию заявки
-    loadPendingSyncRequests();
+    // Загружаем список удаленных заявок
+    loadDeletedRequests();
     
     // Проверяем авторизацию
     checkAuthAndInit();
 });
 
-// Загрузить ожидающие синхронизацию заявки
-function loadPendingSyncRequests() {
+// Загрузить список удаленных заявок
+function loadDeletedRequests() {
     try {
-        const pending = localStorage.getItem(STORAGE_KEYS.SYNC_PENDING);
-        if (pending) {
-            pendingSyncRequests = JSON.parse(pending) || [];
-            console.log('Загружены ожидающие синхронизацию заявки:', pendingSyncRequests.length);
+        const deleted = localStorage.getItem(STORAGE_KEYS.DELETED_REQUESTS);
+        if (deleted) {
+            deletedRequests = JSON.parse(deleted) || [];
+            console.log('Загружено удаленных заявок:', deletedRequests.length);
         }
     } catch (error) {
-        console.error('Ошибка загрузки ожидающих заявок:', error);
-        pendingSyncRequests = [];
+        console.error('Ошибка загрузки удаленных заявок:', error);
+        deletedRequests = [];
     }
 }
 
-// Сохранить ожидающие синхронизацию заявки
-function savePendingSyncRequests() {
+// Сохранить список удаленных заявок
+function saveDeletedRequests() {
     try {
-        localStorage.setItem(STORAGE_KEYS.SYNC_PENDING, JSON.stringify(pendingSyncRequests));
+        localStorage.setItem(STORAGE_KEYS.DELETED_REQUESTS, JSON.stringify(deletedRequests));
     } catch (error) {
-        console.error('Ошибка сохранения ожидающих заявок:', error);
+        console.error('Ошибка сохранения удаленных заявок:', error);
     }
 }
 
@@ -147,7 +146,31 @@ function initApp() {
     // Настройка поиска в выпадающем списке
     setupSearchableSelect();
     
+    // Запуск автоматической синхронизации
+    startAutoSync();
+    
     console.log('Приложение успешно запущено');
+}
+
+// Начать автоматическую синхронизацию
+function startAutoSync() {
+    // Синхронизация при запуске если онлайн
+    if (isOnline) {
+        setTimeout(() => {
+            window.syncAllData().catch(() => {
+                console.log('Автоматическая синхронизация при запуске не удалась');
+            });
+        }, 3000);
+    }
+    
+    // Синхронизация каждые 5 минут если онлайн
+    setInterval(() => {
+        if (isOnline && !syncInProgress) {
+            window.syncAllData().catch(() => {
+                console.log('Периодическая синхронизация не удалась');
+            });
+        }
+    }, 300000); // 5 минут
 }
 
 // Инициализация DOM элементов
@@ -262,21 +285,18 @@ window.syncAllData = async function() {
     showNotification('Начата синхронизация данных...', 'info');
     
     try {
-        // 1. Сначала синхронизируем заявки с сервера
-        await syncRepairRequests();
-        
-        // 2. Обновляем базу оборудования
+        // 1. Сначала обновляем базу оборудования
         await loadEquipmentDatabase(true);
         
-        // 3. Показываем результат
-        showNotification('Синхронизация завершена успешно!', 'success');
-        
-        // 4. Обновляем интерфейс
+        // 2. Обновляем интерфейс
         renderRepairTable();
         updateSummary();
         updateDBButtonInfo();
         
-        // 5. Сохраняем время последней синхронизации
+        // 3. Показываем результат
+        showNotification('Синхронизация завершена успешно!', 'success');
+        
+        // 4. Сохраняем время последней синхронизации
         localStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, new Date().toISOString());
         
     } catch (error) {
@@ -286,169 +306,6 @@ window.syncAllData = async function() {
         syncInProgress = false;
     }
 };
-
-// Синхронизация заявок
-async function syncRepairRequests() {
-    if (!isOnline) {
-        throw new Error('Нет подключения к интернету. Проверьте соединение.');
-    }
-    
-    try {
-        console.log('Начинаем синхронизацию заявок...');
-        
-        // Загружаем заявки с сервера
-        const serverRequests = await loadRepairRequestsFromServer();
-        console.log('Загружено с сервера:', serverRequests.length, 'заявок');
-        
-        // Объединяем с локальными заявками
-        const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
-        console.log('Локальные заявки:', localRequests.length);
-        
-        const mergedRequests = mergeRequests(localRequests, serverRequests);
-        console.log('После объединения:', mergedRequests.length, 'заявок');
-        
-        // Добавляем ожидающие синхронизацию заявки
-        if (pendingSyncRequests.length > 0) {
-            console.log('Добавляем ожидающие заявки:', pendingSyncRequests.length);
-            
-            // Добавляем только новые или обновленные заявки
-            pendingSyncRequests.forEach(request => {
-                // Добавляем метаданные о синхронизации
-                request.synced = true;
-                request.syncDeviceId = deviceId;
-                request.syncTimestamp = new Date().toISOString();
-                
-                // Находим индекс существующей заявки
-                const existingIndex = mergedRequests.findIndex(r => r.id === request.id);
-                
-                if (existingIndex === -1) {
-                    // Если заявка новая - добавляем
-                    mergedRequests.push(request);
-                } else {
-                    // Если заявка уже существует - заменяем
-                    mergedRequests[existingIndex] = request;
-                }
-            });
-            
-            // Очищаем ожидающие заявки
-            pendingSyncRequests = [];
-            savePendingSyncRequests();
-        }
-        
-        // Фильтруем удаленные заявки (не показываем их)
-        const filteredRequests = mergedRequests.filter(request => !request.deleted);
-        
-        // Сохраняем объединенные данные локально
-        repairRequests = filteredRequests;
-        localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
-        localStorage.setItem(STORAGE_KEYS.REQUESTS_LAST_UPDATED, new Date().toISOString());
-        
-        console.log('Заявки синхронизированы. Всего:', repairRequests.length);
-        
-    } catch (error) {
-        console.error('Ошибка синхронизации заявок:', error);
-        throw error;
-    }
-}
-
-// Загрузить заявки с сервера
-async function loadRepairRequestsFromServer() {
-    try {
-        console.log('Загрузка заявок с сервера:', REPAIR_REQUESTS_URL);
-        
-        // Добавляем случайный параметр для предотвращения кэширования
-        const url = REPAIR_REQUESTS_URL + '?t=' + Date.now();
-        const response = await fetchWithTimeout(url, 10000);
-        
-        if (!response.ok) {
-            console.warn('Статус ответа:', response.status, response.statusText);
-            
-            // Если файла нет, создаем пустой массив
-            if (response.status === 404) {
-                console.log('Файл заявок не найден на сервере, создаем новый');
-                return [];
-            }
-            
-            throw new Error(`Ошибка сервера: ${response.status} ${response.statusText}`);
-        }
-        
-        const text = await response.text();
-        console.log('Получен ответ от сервера, длина:', text.length);
-        
-        if (!text.trim()) {
-            console.log('Пустой ответ от сервера');
-            return [];
-        }
-        
-        try {
-            const data = JSON.parse(text);
-            console.log('Данные успешно распарсены');
-            
-            // Фильтруем удаленные заявки при загрузке
-            const filteredData = data.filter(request => !request.deleted);
-            console.log('После фильтрации удаленных:', filteredData.length, 'заявок');
-            
-            return Array.isArray(filteredData) ? filteredData : [];
-        } catch (parseError) {
-            console.error('Ошибка парсинга JSON:', parseError);
-            console.log('Содержимое ответа (первые 500 символов):', text.substring(0, 500));
-            return [];
-        }
-        
-    } catch (error) {
-        console.error('Ошибка загрузки заявок с сервера:', error);
-        return [];
-    }
-}
-
-// Fetch с таймаутом
-function fetchWithTimeout(url, timeout = 10000) {
-    return Promise.race([
-        fetch(url, {
-            mode: 'cors',
-            cache: 'no-cache',
-            headers: {
-                'Accept': 'application/json,text/plain,*/*'
-            }
-        }),
-        new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Таймаут запроса')), timeout)
-        )
-    ]);
-}
-
-// Объединить заявки
-function mergeRequests(localRequests, serverRequests) {
-    const mergedMap = new Map();
-    
-    // Сначала добавляем серверные заявки (исключая удаленные)
-    serverRequests.forEach(request => {
-        if (request && request.id && !request.deleted) {
-            mergedMap.set(request.id, request);
-        }
-    });
-    
-    // Затем добавляем локальные (перезаписываем если новее)
-    localRequests.forEach(request => {
-        if (!request || !request.id || request.deleted) return;
-        
-        const existing = mergedMap.get(request.id);
-        
-        if (!existing) {
-            mergedMap.set(request.id, request);
-        } else {
-            // Сравниваем время обновления
-            const localTime = new Date(request.updatedAt || request.createdAt || 0);
-            const serverTime = new Date(existing.updatedAt || existing.createdAt || 0);
-            
-            if (localTime > serverTime) {
-                mergedMap.set(request.id, request);
-            }
-        }
-    });
-    
-    return Array.from(mergedMap.values());
-}
 
 // Обновить базу оборудования
 window.updateEquipmentDB = async function() {
@@ -562,7 +419,7 @@ window.deleteRequest = async function(id) {
         return;
     }
     
-    if (!confirm('Вы уверены, что хотите удалить эту заявку?')) {
+    if (!confirm('Вы уверены, что хотите удалить эту заявку?\n\nУдаление приведет к полному удалению заявки на всех устройствах при синхронизации.')) {
         return;
     }
     
@@ -573,18 +430,11 @@ window.deleteRequest = async function(id) {
             return;
         }
         
-        // Создаем копию с пометкой об удалении
-        const deletedRequest = {
-            ...request,
-            deleted: true,
-            deletedAt: new Date().toISOString(),
-            deletedBy: currentUser.name,
-            updatedAt: new Date().toISOString()
-        };
-        
-        // Добавляем в ожидающие синхронизацию
-        pendingSyncRequests.push(deletedRequest);
-        savePendingSyncRequests();
+        // Добавляем ID в список удаленных
+        if (!deletedRequests.includes(id)) {
+            deletedRequests.push(id);
+            saveDeletedRequests();
+        }
         
         // Удаляем локально
         repairRequests = repairRequests.filter(req => req.id !== id);
@@ -595,13 +445,13 @@ window.deleteRequest = async function(id) {
         
         showNotification('Заявка удалена', 'success');
         
-        // Автоматическая синхронизация если онлайн
+        // Если онлайн, пытаемся синхронизировать
         if (isOnline) {
             setTimeout(() => {
                 window.syncAllData().catch(() => {
-                    console.log('Автоматическая синхронизация не удалась');
+                    console.log('Синхронизация не удалась');
                 });
-            }, 500);
+            }, 1000);
         }
         
     } catch (error) {
@@ -661,27 +511,11 @@ window.completeRequest = async function(id) {
     request.downtimeHours = downtimeHours;
     request.updatedAt = new Date().toISOString();
     request.completedBy = currentUser.name;
-    request.syncDeviceId = deviceId;
     
     // Сохраняем локально
     localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
     
-    // Добавляем в ожидающие синхронизацию
-    pendingSyncRequests.push(request);
-    savePendingSyncRequests();
-    
-    // Автоматическая синхронизация если онлайн
-    if (isOnline) {
-        showNotification('Ремонт завершен! Синхронизация...', 'info');
-        
-        setTimeout(() => {
-            window.syncAllData().catch(() => {
-                console.log('Автоматическая синхронизация не удалась');
-            });
-        }, 500);
-    } else {
-        showNotification('Ремонт завершен! Синхронизируйте при появлении интернета.', 'warning');
-    }
+    showNotification('Ремонт завершен!', 'success');
     
     renderRepairTable();
     updateSummary();
@@ -701,15 +535,6 @@ async function loadAllData() {
         ]);
         
         applyFilters();
-        
-        // Автоматическая синхронизация если онлайн
-        if (isOnline) {
-            setTimeout(() => {
-                window.syncAllData().catch(error => {
-                    console.log('Автоматическая синхронизация не удалась:', error.message);
-                });
-            }, 1500);
-        }
         
         setTimeout(() => {
             const notification = document.getElementById('notification');
@@ -821,46 +646,20 @@ async function loadRepairRequests() {
     try {
         console.log('Загрузка заявок...');
         
-        // Сначала загружаем локальные
+        // Загружаем локальные данные
         const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
-        console.log('Локальные заявки:', localRequests.length);
         
-        // Если онлайн, пытаемся загрузить с сервера
-        let serverRequests = [];
-        if (isOnline) {
-            try {
-                serverRequests = await loadRepairRequestsFromServer();
-                console.log('Серверные заявки:', serverRequests.length);
-            } catch (serverError) {
-                console.warn('Не удалось загрузить с сервера:', serverError.message);
-                serverRequests = [];
-            }
-        }
+        // Фильтруем удаленные заявки
+        const filteredRequests = localRequests.filter(request => !deletedRequests.includes(request.id));
         
-        // Объединяем
-        const mergedRequests = mergeRequests(localRequests, serverRequests);
-        
-        // Фильтруем удаленные
-        repairRequests = mergedRequests.filter(req => !req.deleted);
-        
-        // Сохраняем локально
+        repairRequests = filteredRequests;
         localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
-        localStorage.setItem(STORAGE_KEYS.REQUESTS_LAST_UPDATED, new Date().toISOString());
         
         console.log('Всего заявок после загрузки:', repairRequests.length);
         
     } catch (error) {
         console.error('Ошибка загрузки заявок:', error);
-        
-        // Пробуем загрузить локальные данные
-        const savedRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS));
-        
-        if (savedRequests && Array.isArray(savedRequests)) {
-            repairRequests = savedRequests.filter(req => !req.deleted);
-            console.log('Используем локальные заявки после ошибки:', repairRequests.length);
-        } else {
-            repairRequests = [];
-        }
+        repairRequests = [];
     }
     
     renderRepairTable();
@@ -1200,16 +999,6 @@ function addEventListeners() {
         isOnline = true;
         showNotification('Соединение восстановлено', 'success');
         checkConnection();
-        
-        // Автоматическая синхронизация при появлении интернета
-        if (pendingSyncRequests.length > 0) {
-            setTimeout(() => {
-                showNotification('Автоматическая синхронизация...', 'info');
-                window.syncAllData().catch(() => {
-                    console.log('Автоматическая синхронизация не удалась');
-                });
-            }, 2000);
-        }
     });
     
     window.addEventListener('offline', () => {
@@ -1231,6 +1020,22 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+// Fetch с таймаутом
+function fetchWithTimeout(url, timeout = 10000) {
+    return Promise.race([
+        fetch(url, {
+            mode: 'cors',
+            cache: 'no-cache',
+            headers: {
+                'Accept': 'application/json,text/plain,*/*'
+            }
+        }),
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Таймаут запроса')), timeout)
+        )
+    ]);
 }
 
 // ============ ОБРАБОТЧИКИ СОБЫТИЙ ============
@@ -1335,7 +1140,6 @@ function createRequestFromForm() {
         productionItem: document.getElementById('productionItem')?.value || '-',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        deviceId: deviceId,
         createdBy: currentUser.name
     };
 }
@@ -1345,21 +1149,6 @@ async function addRepairRequest(request) {
     // Добавляем локально
     repairRequests.push(request);
     localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
-    
-    // Добавляем в ожидающие синхронизацию
-    pendingSyncRequests.push(request);
-    savePendingSyncRequests();
-    
-    // Автоматическая синхронизация если онлайн
-    if (isOnline) {
-        setTimeout(() => {
-            window.syncAllData().catch(() => {
-                console.log('Автоматическая синхронизация не удалась');
-            });
-        }, 500);
-    } else {
-        showNotification('Заявка сохранена локально. Синхронизируйте при появлении интернета.', 'warning');
-    }
     
     return request;
 }
@@ -1645,7 +1434,7 @@ function generateDashboardHTML() {
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
                 <div><strong>Статус:</strong> <span style="color: ${isOnline ? '#4CAF50' : '#F44336'}">${isOnline ? 'Онлайн' : 'Оффлайн'}</span></div>
                 <div><strong>Последняя синхронизация:</strong> ${lastSync}</div>
-                <div><strong>Ожидают синхронизации:</strong> <span style="color: ${pendingSyncRequests.length > 0 ? '#FF9800' : '#4CAF50'}">${pendingSyncRequests.length} заявок</span></div>
+                <div><strong>Удалено заявок:</strong> ${deletedRequests.length}</div>
                 <div><strong>Устройство:</strong> ${deviceId.substring(0, 15)}...</div>
             </div>
         </div>
