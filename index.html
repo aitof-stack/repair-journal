@@ -846,6 +846,15 @@
             }
         }
         
+        // Автоматическая проверка синхронизации каждые 30 минут
+        setInterval(function() {
+            if (window.isOnline) {
+                window.syncAllData().catch(() => {
+                    console.log('Автоматическая синхронизация не удалась');
+                });
+            }
+        }, 1800000); // 30 минут
+        
         // Обновляем сообщение о синхронизации каждые 5 минут
         setInterval(updateSyncMessage, 300000);
         
