@@ -1,8 +1,8 @@
 // ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С FIREBASE СИНХРОНИЗАЦИЕЙ
 
 // Константы
-const APP_VERSION = '5.0.0';
-const APP_NAME = 'Ремонтный журнал (Firebase)';
+const APP_VERSION = '5.0.1';
+const APP_NAME = 'Ремонтный журнал (Firebase Sync)';
 
 // Ссылки на GitHub для данных
 const GITHUB_REPO = 'aitof-stack/repair-journal';
@@ -16,7 +16,8 @@ const STORAGE_KEYS = {
     CURRENT_USER: 'repair_journal_currentUser',
     AUTH_STATUS: 'repair_journal_isAuthenticated',
     DB_LAST_UPDATED: 'equipmentDBLastUpdated_v5',
-    DEVICE_ID: 'deviceId_v5'
+    DEVICE_ID: 'deviceId_v5',
+    LAST_SYNC_TIME: 'lastSyncTime_v5'
 };
 
 // Переменные приложения
@@ -26,6 +27,7 @@ let currentUser = null;
 let isOnline = navigator.onLine;
 let isDBLoading = false;
 let deviceId = null;
+let isSyncing = false;
 
 // Firebase переменные
 let firebaseApp = null;
@@ -88,11 +90,7 @@ async function initApp() {
     const loadingStatus = document.getElementById('loadingStatus');
     
     try {
-        // 1. Инициализация Firebase
-        loadingStatus.textContent = 'Инициализация Firebase...';
-        isFirebaseInitialized = await initializeFirebase();
-        
-        // 2. Инициализация интерфейса
+        // 1. Инициализация интерфейса
         initDOMElements();
         setupRoleBasedUI();
         showUserInfo();
@@ -100,25 +98,37 @@ async function initApp() {
         checkConnection();
         setupSearchableSelect();
         
-        // 3. Загрузка данных
-        if (isFirebaseInitialized) {
-            loadingStatus.textContent = 'Подключение к облачной базе...';
-            await loadRepairRequestsFromFirebase();
-        } else {
-            loadingStatus.textContent = 'Облако недоступно, загрузка локальных данных...';
-            await loadRepairRequestsFromLocal();
-            showNotification('Работа в автономном режиме. Данные не синхронизируются.', 'warning');
-        }
-        
+        // 2. Загрузка базы оборудования
         loadingStatus.textContent = 'Загрузка базы оборудования...';
         await loadEquipmentDatabase();
         
-        // 4. Применение фильтров
+        // 3. Инициализация Firebase
+        loadingStatus.textContent = 'Инициализация синхронизации...';
+        const firebaseInitialized = await initializeFirebase();
+        
+        if (firebaseInitialized) {
+            // 4. Загрузка данных из Firebase
+            loadingStatus.textContent = 'Синхронизация данных с облаком...';
+            await loadRepairRequestsFromFirebase();
+            
+            // 5. Синхронизация локальных данных
+            await syncLocalDataToFirebase();
+        } else {
+            // Работа в офлайн режиме
+            loadingStatus.textContent = 'Облако недоступно, загрузка локальных данных...';
+            await loadRepairRequestsFromLocal();
+            showNotification('Работа в автономном режиме. Данные сохраняются локально.', 'warning');
+        }
+        
+        // 6. Применение фильтров
         applyFilters();
         
     } catch (error) {
         console.error('Ошибка инициализации:', error);
         showNotification('Ошибка загрузки приложения', 'error');
+        
+        // Пробуем загрузить локальные данные
+        await loadRepairRequestsFromLocal();
     }
     
     // Скрываем экран загрузки
@@ -139,13 +149,13 @@ async function initApp() {
 // Инициализация Firebase
 async function initializeFirebase() {
     try {
-        // Проверяем наличие Firebase в глобальной области
+        // Проверяем наличие Firebase
         if (typeof firebase === 'undefined') {
-            console.error('Firebase не загружен');
+            console.warn('Firebase не загружен. Работаем локально.');
             return false;
         }
         
-        // Инициализация Firebase
+        // Конфигурация Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyAdOqQX31vCcj7OXVyNSQX_nRUijAGOVKM",
             authDomain: "repair-journal-eadf1.firebaseapp.com",
@@ -155,44 +165,76 @@ async function initializeFirebase() {
             appId: "1:525057868534:web:372b03243b0bc34b31e2d7"
         };
         
-        firebaseApp = firebase.initializeApp(firebaseConfig);
+        // Инициализация Firebase
+        if (!firebase.apps.length) {
+            firebaseApp = firebase.initializeApp(firebaseConfig);
+        } else {
+            firebaseApp = firebase.app();
+        }
+        
         firestore = firebase.firestore();
         auth = firebase.auth();
         
+        // Настройка кэширования для офлайн работы
+        firestore.enablePersistence({ synchronizeTabs: true })
+            .then(() => {
+                console.log('Firestore persistence включена');
+            })
+            .catch((err) => {
+                console.warn('Firestore persistence error:', err);
+            });
+        
         // Анонимная авторизация
         await auth.signInAnonymously();
-        console.log('Firebase инициализирован. User:', auth.currentUser?.uid);
+        
+        console.log('Firebase инициализирован. User ID:', auth.currentUser?.uid);
+        isFirebaseInitialized = true;
         
         return true;
     } catch (error) {
         console.error('Ошибка инициализации Firebase:', error);
+        isFirebaseInitialized = false;
         return false;
     }
 }
 
-// ============ ФИРБАС ФУНКЦИИ ============
+// ============ СИНХРОНИЗАЦИЯ ДАННЫХ ============
 
 // Загрузка заявок из Firebase
 async function loadRepairRequestsFromFirebase() {
-    if (!firestore) return;
+    if (!firestore || !isFirebaseInitialized) {
+        console.log('Firestore не инициализирован, загружаем локальные данные');
+        return false;
+    }
     
     try {
         console.log('Загрузка данных из Firestore...');
         
-        // Загружаем все заявки
+        // Загружаем все заявки с сортировкой по дате создания
         const snapshot = await firestore.collection('repair_requests')
             .orderBy('createdAt', 'desc')
             .get();
         
-        repairRequests = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        const firebaseRequests = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                synced: true,
+                firebaseId: doc.id
+            };
+        });
         
-        // Сохраняем локально для офлайн работы
+        console.log('Загружено заявок из Firestore:', firebaseRequests.length);
+        
+        // Загружаем локальные данные
+        const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
+        
+        // Объединяем данные: приоритет у Firebase, но сохраняем локальные изменения
+        repairRequests = mergeRequests(firebaseRequests, localRequests);
+        
+        // Сохраняем объединенные данные локально
         localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
-        
-        console.log('Загружено заявок из Firestore:', repairRequests.length);
         
         // Настраиваем подписку на обновления в реальном времени
         setupFirestoreRealtimeListener();
@@ -201,18 +243,111 @@ async function loadRepairRequestsFromFirebase() {
         renderRepairTable();
         updateSummary();
         
+        // Сохраняем время синхронизации
+        localStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, new Date().toISOString());
+        
         return true;
     } catch (error) {
         console.error('Ошибка загрузки из Firebase:', error);
+        showNotification('Ошибка загрузки из облака', 'error');
         return false;
+    }
+}
+
+// Слияние данных Firebase и локальных
+function mergeRequests(firebaseRequests, localRequests) {
+    const merged = [...firebaseRequests];
+    const firebaseIds = new Set(firebaseRequests.map(r => r.id));
+    
+    // Добавляем локальные заявки, которых нет в Firebase
+    localRequests.forEach(localRequest => {
+        if (!firebaseIds.has(localRequest.id)) {
+            merged.push({
+                ...localRequest,
+                synced: false
+            });
+        }
+    });
+    
+    return merged;
+}
+
+// Синхронизация локальных данных с Firebase
+async function syncLocalDataToFirebase() {
+    if (!firestore || !isFirebaseInitialized || isSyncing) {
+        return;
+    }
+    
+    isSyncing = true;
+    
+    try {
+        // Загружаем локальные данные
+        const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
+        
+        // Находим несинхронизированные заявки
+        const unsyncedRequests = localRequests.filter(request => !request.synced || !request.firebaseId);
+        
+        if (unsyncedRequests.length === 0) {
+            console.log('Нет данных для синхронизации');
+            return;
+        }
+        
+        console.log(`Синхронизация ${unsyncedRequests.length} заявок...`);
+        
+        // Синхронизируем каждую заявку
+        for (const request of unsyncedRequests) {
+            try {
+                const requestToSave = { ...request };
+                delete requestToSave.id;
+                delete requestToSave.synced;
+                delete requestToSave.firebaseId;
+                
+                let docRef;
+                
+                if (request.firebaseId) {
+                    // Обновляем существующую заявку
+                    await firestore.collection('repair_requests').doc(request.firebaseId).update(requestToSave);
+                    docRef = { id: request.firebaseId };
+                } else {
+                    // Создаем новую заявку
+                    docRef = await firestore.collection('repair_requests').add(requestToSave);
+                }
+                
+                // Обновляем локальную запись
+                const index = repairRequests.findIndex(r => r.id === request.id);
+                if (index !== -1) {
+                    repairRequests[index].synced = true;
+                    repairRequests[index].firebaseId = docRef.id;
+                }
+                
+                console.log('Синхронизировано:', request.id, '→', docRef.id);
+                
+            } catch (error) {
+                console.error('Ошибка синхронизации заявки', request.id, ':', error);
+            }
+        }
+        
+        // Сохраняем обновленные данные
+        localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+        localStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, new Date().toISOString());
+        
+        showNotification(`Синхронизировано ${unsyncedRequests.length} заявок`, 'success');
+        
+    } catch (error) {
+        console.error('Ошибка синхронизации:', error);
+        showNotification('Ошибка синхронизации', 'error');
+    } finally {
+        isSyncing = false;
     }
 }
 
 // Настройка подписки на обновления в реальном времени
 function setupFirestoreRealtimeListener() {
-    if (!firestore) return;
+    if (!firestore || !isFirebaseInitialized) {
+        return;
+    }
     
-    // Отменяем предыдущую подписку
+    // Отписываемся от предыдущей подписки
     if (firestoreUnsubscribe) {
         firestoreUnsubscribe();
     }
@@ -220,43 +355,33 @@ function setupFirestoreRealtimeListener() {
     firestoreUnsubscribe = firestore.collection('repair_requests')
         .orderBy('createdAt', 'desc')
         .onSnapshot((snapshot) => {
-            const requests = [];
             snapshot.docChanges().forEach((change) => {
                 const data = change.doc.data();
-                const request = {
-                    id: change.doc.id,
-                    ...data
-                };
+                const requestId = change.doc.id;
                 
                 if (change.type === 'added' || change.type === 'modified') {
-                    // Находим индекс существующей заявки
-                    const existingIndex = requests.findIndex(r => r.id === request.id);
-                    if (existingIndex >= 0) {
-                        requests[existingIndex] = request;
+                    const existingIndex = repairRequests.findIndex(r => r.firebaseId === requestId);
+                    
+                    const updatedRequest = {
+                        ...data,
+                        id: requestId,
+                        firebaseId: requestId,
+                        synced: true
+                    };
+                    
+                    if (existingIndex !== -1) {
+                        repairRequests[existingIndex] = updatedRequest;
                     } else {
-                        requests.push(request);
+                        repairRequests.push(updatedRequest);
                     }
+                    
                 } else if (change.type === 'removed') {
-                    // Удаляем заявку
-                    const index = requests.findIndex(r => r.id === change.doc.id);
-                    if (index >= 0) {
-                        requests.splice(index, 1);
-                    }
+                    repairRequests = repairRequests.filter(r => r.firebaseId !== requestId);
                 }
             });
             
-            // Получаем полный список
-            const allRequests = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            
-            repairRequests = allRequests;
-            
-            // Сохраняем локально
             localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
             
-            // Обновляем интерфейс
             renderRepairTable();
             updateSummary();
             applyFilters();
@@ -269,11 +394,9 @@ function setupFirestoreRealtimeListener() {
         });
 }
 
-// Загрузка локальных данных (офлайн режим)
+// Загрузка локальных данных
 async function loadRepairRequestsFromLocal() {
     try {
-        console.log('Загрузка локальных данных...');
-        
         const localRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.REPAIR_REQUESTS)) || [];
         repairRequests = localRequests;
         
@@ -282,13 +405,15 @@ async function loadRepairRequestsFromLocal() {
         renderRepairTable();
         updateSummary();
         
-        return true;
+        return repairRequests;
     } catch (error) {
         console.error('Ошибка загрузки локальных данных:', error);
         repairRequests = [];
-        return false;
+        return [];
     }
 }
+
+// ============ ИНИЦИАЛИЗАЦИЯ DOM ============
 
 // Инициализация DOM элементов
 function initDOMElements() {
@@ -322,11 +447,7 @@ function checkAuth() {
     }
     
     currentUser = savedUser;
-    
-    // Настройка интерфейса по роли
     setupRoleBasedUI();
-    
-    // Показать информацию о пользователе
     showUserInfo();
     
     return true;
@@ -336,14 +457,12 @@ function checkAuth() {
 function setupRoleBasedUI() {
     if (!currentUser) return;
     
-    // Автозаполнение автора для авторов заявок
     if (currentUser.type === 'author' && authorInput) {
         authorInput.value = currentUser.name;
         authorInput.readOnly = true;
         authorInput.style.backgroundColor = '#f0f0f0';
     }
     
-    // Для ремонтной службы скрываем форму добавления
     if (currentUser.type === 'repair') {
         const formSection = document.getElementById('formSection');
         const searchFilter = document.getElementById('searchFilter');
@@ -383,12 +502,10 @@ function getRoleName(roleType) {
 // Выход из системы
 window.logout = function() {
     if (confirm('Вы уверены, что хотите выйти?')) {
-        // Отписываемся от обновлений
         if (firestoreUnsubscribe) {
             firestoreUnsubscribe();
         }
         
-        // Выход из Firebase
         if (auth) {
             auth.signOut();
         }
@@ -408,13 +525,11 @@ window.syncAllData = async function() {
         return;
     }
     
-    showNotification('Синхронизация данных...', 'info');
+    showNotification('Начата синхронизация данных...', 'info');
     
     try {
-        // Перезагружаем данные из Firebase
         await loadRepairRequestsFromFirebase();
-        
-        // Обновляем базу оборудования
+        await syncLocalDataToFirebase();
         await loadEquipmentDatabase(true);
         
         showNotification('Синхронизация завершена успешно!', 'success');
@@ -475,10 +590,10 @@ window.exportRepairData = function() {
         return;
     }
     
-    let csvContent = "ID;Дата;Время;Автор;Участок;Инв.номер;Оборудование;Модель;Номер станка;Неисправность;Дата окончания;Время окончания;Статус;Кол-во простоев;Время простоя;Номенклатура;Создано;Обновлено\n";
+    let csvContent = "ID;Дата;Время;Автор;Участок;Инв.номер;Оборудование;Модель;Номер станка;Неисправность;Дата окончания;Время окончания;Статус;Кол-во простоев;Время простоя;Номенклатура;Создано;Обновлено;Статус синхронизации\n";
     
     repairRequests.forEach(request => {
-        csvContent += `"${request.id || ''}";"${request.date || ''}";"${request.time || ''}";"${request.author || ''}";"${request.location || ''}";"${request.invNumber || ''}";"${request.equipmentName || ''}";"${request.model || ''}";"${request.machineNumber || ''}";"${request.faultDescription || ''}";"${request.repairEndDate || ''}";"${request.repairEndTime || ''}";"${request.status || ''}";"${request.downtimeCount || 0}";"${request.downtimeHours || 0}";"${request.productionItem || ''}";"${request.createdAt || ''}";"${request.updatedAt || ''}"\n`;
+        csvContent += `"${request.id || ''}";"${request.date || ''}";"${request.time || ''}";"${request.author || ''}";"${request.location || ''}";"${request.invNumber || ''}";"${request.equipmentName || ''}";"${request.model || ''}";"${request.machineNumber || ''}";"${request.faultDescription || ''}";"${request.repairEndDate || ''}";"${request.repairEndTime || ''}";"${request.status || ''}";"${request.downtimeCount || 0}";"${request.downtimeHours || 0}";"${request.productionItem || ''}";"${request.createdAt || ''}";"${request.updatedAt || ''}";"${request.synced ? 'Синхронизировано' : 'Локально'}"\n`;
     });
     
     const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -542,24 +657,23 @@ window.deleteRequest = async function(id) {
     }
     
     try {
-        const request = repairRequests.find(req => req.id === id);
+        const request = repairRequests.find(req => req.id === id || req.firebaseId === id);
         if (!request) {
             showNotification('Заявка не найдена', 'error');
             return;
         }
         
-        // Удаляем из Firebase если онлайн
-        if (isFirebaseInitialized && firestore) {
-            await firestore.collection('repair_requests').doc(id).delete();
-            showNotification('Заявка удалена из облака', 'success');
-        } else {
-            // Удаляем локально
-            repairRequests = repairRequests.filter(req => req.id !== id);
-            localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
-            renderRepairTable();
-            updateSummary();
-            showNotification('Заявка удалена локально', 'success');
+        if (request.firebaseId && isFirebaseInitialized && firestore) {
+            await firestore.collection('repair_requests').doc(request.firebaseId).delete();
         }
+        
+        repairRequests = repairRequests.filter(req => req.id !== id && req.firebaseId !== id);
+        localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+        
+        renderRepairTable();
+        updateSummary();
+        
+        showNotification('Заявка удалена', 'success');
         
     } catch (error) {
         console.error('Ошибка при удалении заявки:', error);
@@ -576,7 +690,7 @@ window.completeRequest = async function(id) {
         return;
     }
     
-    const request = repairRequests.find(req => req.id === id);
+    const request = repairRequests.find(req => req.id === id || req.firebaseId === id);
     if (!request) {
         showNotification('Заявка не найдена', 'error');
         return;
@@ -605,12 +719,6 @@ window.completeRequest = async function(id) {
         repairEndTime
     );
     
-    if (isNaN(downtimeHours) || downtimeHours < 0) {
-        showNotification('Ошибка расчета времени простоя', 'error');
-        return;
-    }
-    
-    // Обновляем локально
     request.status = 'completed';
     request.repairEndDate = repairEndDate;
     request.repairEndTime = repairEndTime;
@@ -618,13 +726,13 @@ window.completeRequest = async function(id) {
     request.downtimeHours = downtimeHours;
     request.updatedAt = new Date().toISOString();
     request.completedBy = currentUser.name;
+    request.synced = false;
     
     localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
     
-    // Обновляем в Firebase если онлайн
-    if (isFirebaseInitialized && firestore) {
+    if (request.firebaseId && isFirebaseInitialized && firestore) {
         try {
-            await firestore.collection('repair_requests').doc(id).update({
+            await firestore.collection('repair_requests').doc(request.firebaseId).update({
                 status: 'completed',
                 repairEndDate: repairEndDate,
                 repairEndTime: repairEndTime,
@@ -634,6 +742,7 @@ window.completeRequest = async function(id) {
                 completedBy: currentUser.name
             });
             
+            request.synced = true;
             showNotification('Ремонт завершен и синхронизирован!', 'success');
         } catch (error) {
             console.error('Ошибка обновления в Firebase:', error);
@@ -1101,7 +1210,6 @@ function addEventListeners() {
         showNotification('Соединение восстановлено', 'success');
         checkConnection();
         
-        // Пробуем переподключиться к Firebase
         if (!isFirebaseInitialized) {
             setTimeout(() => {
                 initializeFirebase().then(success => {
@@ -1235,7 +1343,6 @@ function createRequestFromForm() {
     }
     
     return {
-        id: Date.now().toString(), // Временный ID
         date: document.getElementById('date')?.value || '',
         time: document.getElementById('time')?.value || '',
         author: authorName,
@@ -1249,41 +1356,57 @@ function createRequestFromForm() {
         downtimeCount: 0,
         downtimeHours: 0,
         productionItem: document.getElementById('productionItem')?.value || '-',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
         createdBy: currentUser.name,
         deviceId: deviceId
     };
 }
 
-// Добавить заявку (в Firebase)
+// Добавить заявку (с синхронизацией)
 async function addRepairRequest(request) {
-    // Добавляем локально для быстрого отклика
-    repairRequests.push(request);
+    // Генерируем локальный ID
+    const localId = 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    request.id = localId;
+    request.synced = false;
+    request.createdAt = new Date().toISOString();
+    request.updatedAt = new Date().toISOString();
+    
+    // Добавляем в локальный массив
+    repairRequests.unshift(request);
+    
+    // Сохраняем локально
     localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
     
-    showNotification('Заявка добавляется...', 'info');
+    // Обновляем интерфейс
+    renderRepairTable();
+    updateSummary();
     
-    // Сохраняем в Firebase если онлайн
+    // Пытаемся синхронизировать с Firebase
     if (isFirebaseInitialized && firestore) {
         try {
-            // Удаляем временный ID, Firebase создаст свой
             const requestToSave = { ...request };
             delete requestToSave.id;
+            delete requestToSave.synced;
             
-            // Добавляем в Firebase
             const docRef = await firestore.collection('repair_requests').add(requestToSave);
-            console.log('Заявка сохранена в Firebase с ID:', docRef.id);
             
-            // Обновление придет через onSnapshot, поэтому не обновляем здесь
-            showNotification('Заявка успешно добавлена и синхронизирована!', 'success');
+            // Обновляем локальную запись с Firebase ID
+            const index = repairRequests.findIndex(r => r.id === localId);
+            if (index !== -1) {
+                repairRequests[index].firebaseId = docRef.id;
+                repairRequests[index].synced = true;
+                repairRequests[index].id = docRef.id;
+                
+                localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+                
+                showNotification('Заявка добавлена и синхронизирована!', 'success');
+            }
             
         } catch (error) {
             console.error('Ошибка сохранения в Firebase:', error);
-            showNotification('Заявка добавлена локально. Ошибка синхронизации.', 'warning');
+            showNotification('Заявка добавлена локально. Синхронизация при восстановлении связи.', 'warning');
         }
     } else {
-        showNotification('Заявка добавлена локально', 'success');
+        showNotification('Заявка добавлена локально. Синхронизация при восстановлении связи.', 'warning');
     }
     
     return request;
@@ -1371,8 +1494,8 @@ function renderRepairTable(filteredRequests = null) {
     const requestsToRender = filteredRequests || repairRequests;
     
     requestsToRender.sort((a, b) => {
-        const dateA = new Date(a.date + 'T' + a.time);
-        const dateB = new Date(b.date + 'T' + b.time);
+        const dateA = new Date(a.createdAt || a.date + 'T' + a.time);
+        const dateB = new Date(b.createdAt || b.date + 'T' + b.time);
         return dateB - dateA;
     });
     
@@ -1381,7 +1504,7 @@ function renderRepairTable(filteredRequests = null) {
     if (requestsToRender.length === 0) {
         const emptyRow = document.createElement('tr');
         emptyRow.innerHTML = `
-            <td colspan="15" style="text-align: center; padding: 30px; color: #666;">
+            <td colspan="16" style="text-align: center; padding: 30px; color: #666;">
                 <strong>Нет заявок на ремонт</strong>
                 <p style="margin: 5px 0 0 0; font-size: 14px;">${isFirebaseInitialized ? 'Создайте первую заявку' : 'Ожидание подключения к облаку...'}</p>
             </td>
@@ -1416,6 +1539,9 @@ function renderRepairTable(filteredRequests = null) {
         const statusText = request.status === 'pending' ? 'В ремонте' : 'Завершено';
         const statusClass = request.status === 'pending' ? 'status-pending' : 'status-completed';
         
+        const syncStatus = request.synced ? '✅' : '📱';
+        const syncTitle = request.synced ? 'Синхронизировано с облаком' : 'Только локально';
+        
         let actionButtons = '';
         
         if (currentUser && currentUser.type === 'admin') {
@@ -1445,6 +1571,7 @@ function renderRepairTable(filteredRequests = null) {
             <td>${request.downtimeCount}</td>
             <td>${downtimeHours.toFixed(1)} ч</td>
             <td>${request.productionItem}</td>
+            <td title="${syncTitle}">${syncStatus}</td>
             <td class="actions-cell">${actionButtons}</td>
         `;
         
@@ -1535,6 +1662,8 @@ function applyFilters() {
 // Генерация HTML дашборда
 function generateDashboardHTML() {
     const stats = calculateDashboardStats();
+    const lastSync = localStorage.getItem(STORAGE_KEYS.LAST_SYNC_TIME);
+    const lastSyncText = lastSync ? new Date(lastSync).toLocaleString('ru-RU') : 'никогда';
     
     return `
         <div class="dashboard-stats">
@@ -1567,7 +1696,8 @@ function generateDashboardHTML() {
             <h3 style="color: #4CAF50; margin-top: 0;">Статус синхронизации</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
                 <div><strong>Статус Firebase:</strong> <span style="color: ${isFirebaseInitialized ? '#4CAF50' : '#F44336'}">${isFirebaseInitialized ? 'ПОДКЛЮЧЕНО' : 'ОФФЛАЙН'}</span></div>
-                <div><strong>Заявок в облаке:</strong> ${repairRequests.length}</div>
+                <div><strong>Заявок в облаке:</strong> ${repairRequests.filter(r => r.synced).length} из ${repairRequests.length}</div>
+                <div><strong>Последняя синхронизация:</strong> ${lastSyncText}</div>
                 <div><strong>База оборудования:</strong> ${equipmentDatabase.length} записей</div>
                 <div><strong>Устройство:</strong> ${deviceId.substring(0, 15)}...</div>
             </div>
@@ -1774,7 +1904,6 @@ function showNotification(message, type = 'info') {
 
 // Перенаправление на страницу входа
 function redirectToLogin() {
-    // Отписываемся от обновлений Firebase перед переходом
     if (firestoreUnsubscribe) {
         firestoreUnsubscribe();
     }
@@ -1861,7 +1990,6 @@ window.addEventListener('error', function(e) {
 window.addEventListener('load', function() {
     console.log('Окно полностью загружено');
     
-    // Проверяем, находимся ли мы на GitHub Pages
     if (window.location.href.includes('github.io')) {
         console.log('Работаем на GitHub Pages');
     }
