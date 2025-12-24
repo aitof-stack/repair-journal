@@ -773,6 +773,9 @@
     
     <!-- Инициализация приложения -->
     <script>
+        // Флаг для предотвращения повторной инициализации
+        let pageInitialized = false;
+        
         // Регистрация Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
@@ -787,8 +790,16 @@
             });
         }
 
-        // Проверка авторизации при загрузке
-        document.addEventListener('DOMContentLoaded', async function() {
+        // Основная функция инициализации страницы
+        async function initializePage() {
+            // Защита от повторной инициализации
+            if (pageInitialized) {
+                console.log('Страница уже инициализирована');
+                return;
+            }
+            
+            pageInitialized = true;
+            
             const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
             const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
 
@@ -797,12 +808,20 @@
                 return;
             }
             
+            console.log('Пользователь авторизован:', currentUser.name);
+            
             // Даем время на инициализацию Firebase
             await new Promise(resolve => setTimeout(resolve, 1000));
             
             // Показываем контент
             document.getElementById('loadingScreen').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
+        }
+
+        // Инициализация при загрузке DOM
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('DOM загружен, начинаем инициализацию страницы...');
+            await initializePage();
         });
 
         // Функция для обновления сообщения о синхронизации
