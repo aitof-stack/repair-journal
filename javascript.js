@@ -1,13 +1,13 @@
 // ЖУРНАЛ ЗАЯВОК НА РЕМОНТ ОБОРУДОВАНИЯ - ВЕРСИЯ С FIREBASE СИНХРОНИЗАЦИЕЙ
 
 // Константы
-const APP_VERSION = '5.0.3';
+const APP_VERSION = '5.0.4';
 const APP_NAME = 'Ремонтный журнал (Firebase Sync)';
 
 // Ссылки на GitHub для данных
 const GITHUB_REPO = 'aitof-stack/repair-journal';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/' + GITHUB_REPO + '/main/';
-const EQUIPMENT_DB_URL = GITHUB_RAW_URL + 'data/equipment_database.csv'; // Исправлен путь
+const EQUIPMENT_DB_URL = GITHUB_RAW_URL + 'data/equipment_database.csv';
 
 // Ключи для хранения данных
 const STORAGE_KEYS = {
@@ -36,6 +36,7 @@ let auth = null;
 let firestoreUnsubscribe = null;
 let isFirebaseInitialized = false;
 let isSyncing = false;
+let firebaseInitializationAttempted = false;
 
 // DOM элементы
 let repairForm, invNumberSelect, equipmentNameInput, locationInput, modelInput;
@@ -43,8 +44,9 @@ let machineNumberInput, authorInput, clearBtn, repairTableBody, searchInput;
 let statusFilter, locationFilter, monthFilter, totalRequestsElement;
 let pendingRequestsElement, completedRequestsElement, totalDowntimeElement;
 
-// Флаг инициализации
+// Флаги инициализации
 let appInitialized = false;
+let initializationInProgress = false;
 
 // ============ ИНИЦИАЛИЗАЦИЯ ============
 
@@ -66,34 +68,45 @@ document.addEventListener('DOMContentLoaded', function() {
     deviceId = generateDeviceId();
     console.log('Device ID:', deviceId);
     
-    // Проверяем авторизацию
+    // Проверяем авторизацию и инициализируем приложение
     checkAuthAndInit();
 });
 
 // Проверка авторизации и инициализация
 async function checkAuthAndInit() {
-    // Проверяем, не инициализировано ли уже приложение
+    // Защита от повторной инициализации
+    if (initializationInProgress) {
+        console.log('Инициализация уже выполняется...');
+        return;
+    }
+    
     if (appInitialized) {
         console.log('Приложение уже инициализировано');
         return;
     }
     
-    const isAuthenticated = localStorage.getItem(STORAGE_KEYS.AUTH_STATUS);
-    const savedUser = JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER));
+    initializationInProgress = true;
     
-    if (!isAuthenticated || !savedUser) {
-        redirectToLogin();
-        return;
+    try {
+        const isAuthenticated = localStorage.getItem(STORAGE_KEYS.AUTH_STATUS);
+        const savedUser = JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT_USER));
+        
+        if (!isAuthenticated || !savedUser) {
+            redirectToLogin();
+            return;
+        }
+        
+        currentUser = savedUser;
+        console.log(`Пользователь: ${currentUser.name} (${currentUser.type})`);
+        
+        // Устанавливаем флаг инициализации
+        appInitialized = true;
+        
+        // Инициализация приложения
+        await initApp();
+    } finally {
+        initializationInProgress = false;
     }
-    
-    currentUser = savedUser;
-    console.log(`Пользователь: ${currentUser.name} (${currentUser.type})`);
-    
-    // Устанавливаем флаг инициализации
-    appInitialized = true;
-    
-    // Инициализация приложения
-    await initApp();
 }
 
 // Основная функция инициализации
@@ -115,7 +128,7 @@ async function initApp() {
         loadingStatus.textContent = 'Загрузка базы оборудования...';
         await loadEquipmentDatabase();
         
-        // 3. Инициализация Firebase
+        // 3. Инициализация Firebase (с защитой от повторной инициализации)
         loadingStatus.textContent = 'Инициализация синхронизации...';
         const firebaseInitialized = await initializeFirebase();
         
@@ -159,13 +172,26 @@ async function initApp() {
     console.log('Приложение успешно запущено. Firebase:', isFirebaseInitialized ? 'ONLINE' : 'OFFLINE');
 }
 
-// Инициализация Firebase
+// Инициализация Firebase с защитой от повторной инициализации
 async function initializeFirebase() {
+    // Если Firebase уже инициализирован, возвращаем true
+    if (isFirebaseInitialized) {
+        console.log('Firebase уже инициализирован');
+        return true;
+    }
+    
+    // Если попытка инициализации уже была, не повторяем
+    if (firebaseInitializationAttempted) {
+        console.log('Попытка инициализации Firebase уже была выполнена');
+        return isFirebaseInitialized;
+    }
+    
+    firebaseInitializationAttempted = true;
     console.log('Проверяем инициализацию Firebase...');
     
-    // Проверяем наличие Firebase
+    // Проверяем наличие Firebase SDK
     if (typeof firebase === 'undefined') {
-        console.warn('Firebase не загружен. Работаем в офлайн режиме.');
+        console.warn('Firebase SDK не загружен. Работаем в офлайн режиме.');
         isFirebaseInitialized = false;
         return false;
     }
@@ -173,40 +199,71 @@ async function initializeFirebase() {
     try {
         // Проверяем, инициализировано ли приложение Firebase
         if (firebase.apps.length === 0) {
-            console.warn('Firebase не инициализирован. Пожалуйста, обновите страницу.');
+            console.warn('Firebase приложение не инициализировано. Проверьте firebase-config.js');
             isFirebaseInitialized = false;
             return false;
         }
         
-        // Получаем экземпляры
+        // Получаем экземпляры (уже должны быть доступны через firebase-config.js)
         firebaseApp = firebase.app();
         firestore = firebase.firestore();
         auth = firebase.auth();
         
         console.log('Firebase приложения найдены:', firebase.apps.length);
+        console.log('Firebase project:', firebaseApp.options.projectId);
         
-        // Настраиваем кэширование для офлайн работы
+        // Настраиваем кэширование для офлайн работы (только один раз)
         try {
             await firestore.enablePersistence({ synchronizeTabs: true });
             console.log('Firestore persistence включена');
         } catch (persistenceError) {
-            console.warn('Не удалось включить persistence:', persistenceError.message);
-            // Продолжаем работу без persistence
+            // Если persistence уже включена, это нормально
+            if (persistenceError.code === 'failed-precondition') {
+                console.log('Firestore persistence уже включена в другой вкладке');
+            } else if (persistenceError.code === 'unimplemented') {
+                console.warn('Firestore persistence не поддерживается в этом браузере');
+            } else {
+                console.warn('Не удалось включить persistence:', persistenceError.message);
+            }
         }
         
-        // Анонимная авторизация
+        // Анонимная авторизация (если не авторизован)
         if (!auth.currentUser) {
             console.log('Выполняем анонимный вход...');
             await auth.signInAnonymously();
+            console.log('Анонимный вход выполнен. User ID:', auth.currentUser?.uid);
+        } else {
+            console.log('Уже авторизован. User ID:', auth.currentUser?.uid);
         }
         
-        console.log('Firebase готов. User ID:', auth.currentUser?.uid);
+        // Проверяем доступность Firestore
+        const testDocRef = firestore.collection('test').doc('connection_test');
+        try {
+            await testDocRef.set({ test: true, timestamp: new Date() });
+            await testDocRef.delete();
+            console.log('Firestore доступен для записи');
+        } catch (firestoreError) {
+            console.warn('Firestore доступен только для чтения или офлайн:', firestoreError.message);
+        }
+        
         isFirebaseInitialized = true;
+        console.log('Firebase успешно инициализирован');
         return true;
         
     } catch (error) {
         console.error('Ошибка инициализации Firebase:', error);
         isFirebaseInitialized = false;
+        
+        // Показываем подробную информацию об ошибке
+        if (error.code === 'permission-denied') {
+            console.error('Ошибка доступа к Firebase. Проверьте правила безопасности Firestore.');
+            showNotification('Ошибка доступа к облачной базе. Проверьте правила безопасности.', 'error');
+        } else if (error.code === 'failed-precondition') {
+            console.error('Firebase уже инициализирован в другой вкладке');
+        } else {
+            console.error('Неизвестная ошибка Firebase:', error.code, error.message);
+        }
+        
         return false;
     }
 }
@@ -223,6 +280,9 @@ async function loadRepairRequestsFromFirebase() {
     try {
         console.log('Загрузка данных из Firestore...');
         
+        // Проверяем правила доступа
+        const testQuery = firestore.collection('repair_requests').limit(1);
+        
         // Загружаем все заявки с сортировкой по дате создания
         const snapshot = await firestore.collection('repair_requests')
             .orderBy('createdAt', 'desc')
@@ -233,7 +293,7 @@ async function loadRepairRequestsFromFirebase() {
             return {
                 id: doc.id,
                 ...data,
-                synced: true, // Помечаем как синхронизированные
+                synced: true,
                 firebaseId: doc.id
             };
         });
@@ -262,7 +322,16 @@ async function loadRepairRequestsFromFirebase() {
         return true;
     } catch (error) {
         console.error('Ошибка загрузки из Firebase:', error);
-        showNotification('Ошибка загрузки из облака', 'error');
+        
+        // Проверяем тип ошибки
+        if (error.code === 'permission-denied') {
+            showNotification('Нет доступа к облачной базе. Проверьте правила безопасности Firestore.', 'error');
+        } else if (error.code === 'failed-precondition') {
+            showNotification('Ошибка индексов Firestore. Требуется создать индексы.', 'error');
+        } else {
+            showNotification('Ошибка загрузки из облака', 'error');
+        }
+        
         return false;
     }
 }
@@ -277,12 +346,27 @@ function mergeRequests(firebaseRequests, localRequests) {
         if (!firebaseIds.has(localRequest.id)) {
             merged.push({
                 ...localRequest,
-                synced: false // Помечаем как несинхронизированные
+                synced: false
             });
         }
     });
     
-    return merged;
+    // Удаляем дубликаты по firebaseId
+    const uniqueRequests = [];
+    const seenFirebaseIds = new Set();
+    
+    merged.forEach(request => {
+        if (request.firebaseId) {
+            if (!seenFirebaseIds.has(request.firebaseId)) {
+                seenFirebaseIds.add(request.firebaseId);
+                uniqueRequests.push(request);
+            }
+        } else {
+            uniqueRequests.push(request);
+        }
+    });
+    
+    return uniqueRequests;
 }
 
 // Синхронизация локальных данных с Firebase
@@ -292,6 +376,7 @@ async function syncLocalDataToFirebase() {
     }
     
     isSyncing = true;
+    console.log('Начинаем синхронизацию локальных данных...');
     
     try {
         // Загружаем локальные данные
@@ -306,6 +391,7 @@ async function syncLocalDataToFirebase() {
         }
         
         console.log(`Синхронизация ${unsyncedRequests.length} заявок...`);
+        let successfulSyncs = 0;
         
         // Синхронизируем каждую заявку
         for (const request of unsyncedRequests) {
@@ -315,15 +401,25 @@ async function syncLocalDataToFirebase() {
                 delete requestToSave.synced;
                 delete requestToSave.firebaseId;
                 
+                // Убедимся, что у заявки есть обязательные поля
+                if (!requestToSave.createdAt) {
+                    requestToSave.createdAt = new Date().toISOString();
+                }
+                if (!requestToSave.updatedAt) {
+                    requestToSave.updatedAt = new Date().toISOString();
+                }
+                
                 let docRef;
                 
                 if (request.firebaseId) {
                     // Обновляем существующую заявку
                     await firestore.collection('repair_requests').doc(request.firebaseId).update(requestToSave);
                     docRef = { id: request.firebaseId };
+                    console.log('Обновлена заявка в Firebase:', request.firebaseId);
                 } else {
                     // Создаем новую заявку
                     docRef = await firestore.collection('repair_requests').add(requestToSave);
+                    console.log('Создана заявка в Firebase:', docRef.id);
                 }
                 
                 // Обновляем локальную запись
@@ -331,24 +427,37 @@ async function syncLocalDataToFirebase() {
                 if (index !== -1) {
                     repairRequests[index].synced = true;
                     repairRequests[index].firebaseId = docRef.id;
+                    repairRequests[index].id = docRef.id; // Используем Firebase ID как основной
                 }
                 
-                console.log('Синхронизировано:', request.id, '→', docRef.id);
+                successfulSyncs++;
                 
             } catch (error) {
-                console.error('Ошибка синхронизации заявки', request.id, ':', error);
+                console.error('Ошибка синхронизации заявки', request.id, ':', error.code, error.message);
+                
+                // Если ошибка доступа, пропускаем эту заявку
+                if (error.code === 'permission-denied') {
+                    console.warn('Нет прав для синхронизации заявки', request.id);
+                }
             }
         }
         
-        // Сохраняем обновленные данные
+        // Сохраняем обновленные данные локально
         localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
         localStorage.setItem(STORAGE_KEYS.LAST_SYNC_TIME, new Date().toISOString());
         
-        showNotification(`Синхронизировано ${unsyncedRequests.length} заявок`, 'success');
+        if (successfulSyncs > 0) {
+            showNotification(`Синхронизировано ${successfulSyncs} заявок`, 'success');
+        }
+        
+        if (successfulSyncs < unsyncedRequests.length) {
+            const failed = unsyncedRequests.length - successfulSyncs;
+            showNotification(`${failed} заявок не удалось синхронизировать`, 'warning');
+        }
         
     } catch (error) {
-        console.error('Ошибка синхронизации:', error);
-        showNotification('Ошибка синхронизации', 'error');
+        console.error('Критическая ошибка синхронизации:', error);
+        showNotification('Ошибка синхронизации: ' + error.message, 'error');
     } finally {
         isSyncing = false;
     }
@@ -362,53 +471,95 @@ function setupFirestoreRealtimeListener() {
     
     // Отписываемся от предыдущей подписки
     if (firestoreUnsubscribe) {
+        console.log('Отписываемся от предыдущей подписки Firestore');
         firestoreUnsubscribe();
     }
     
-    firestoreUnsubscribe = firestore.collection('repair_requests')
-        .orderBy('createdAt', 'desc')
-        .onSnapshot((snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-                const data = change.doc.data();
-                const requestId = change.doc.id;
+    console.log('Настраиваем подписку на обновления Firestore в реальном времени');
+    
+    try {
+        firestoreUnsubscribe = firestore.collection('repair_requests')
+            .orderBy('createdAt', 'desc')
+            .onSnapshot((snapshot) => {
+                console.log('Получены изменения из Firestore:', snapshot.docChanges().length, 'изменений');
                 
-                if (change.type === 'added' || change.type === 'modified') {
-                    // Добавляем или обновляем заявку
-                    const existingIndex = repairRequests.findIndex(r => r.firebaseId === requestId);
+                snapshot.docChanges().forEach((change) => {
+                    const data = change.doc.data();
+                    const requestId = change.doc.id;
                     
-                    const updatedRequest = {
-                        ...data,
-                        id: requestId,
-                        firebaseId: requestId,
-                        synced: true
-                    };
-                    
-                    if (existingIndex !== -1) {
-                        repairRequests[existingIndex] = updatedRequest;
-                    } else {
-                        repairRequests.push(updatedRequest);
+                    if (change.type === 'added') {
+                        console.log('Добавлена заявка из Firebase:', requestId);
+                        const existingIndex = repairRequests.findIndex(r => r.firebaseId === requestId);
+                        
+                        const newRequest = {
+                            ...data,
+                            id: requestId,
+                            firebaseId: requestId,
+                            synced: true
+                        };
+                        
+                        if (existingIndex === -1) {
+                            repairRequests.push(newRequest);
+                        }
+                        
+                    } else if (change.type === 'modified') {
+                        console.log('Обновлена заявка из Firebase:', requestId);
+                        const existingIndex = repairRequests.findIndex(r => r.firebaseId === requestId);
+                        
+                        if (existingIndex !== -1) {
+                            repairRequests[existingIndex] = {
+                                ...repairRequests[existingIndex],
+                                ...data,
+                                synced: true
+                            };
+                        }
+                        
+                    } else if (change.type === 'removed') {
+                        console.log('Удалена заявка из Firebase:', requestId);
+                        repairRequests = repairRequests.filter(r => r.firebaseId !== requestId);
                     }
-                    
-                } else if (change.type === 'removed') {
-                    // Удаляем заявку
-                    repairRequests = repairRequests.filter(r => r.firebaseId !== requestId);
+                });
+                
+                // Сортируем по дате создания
+                repairRequests.sort((a, b) => {
+                    const dateA = new Date(a.createdAt || a.date || 0);
+                    const dateB = new Date(b.createdAt || b.date || 0);
+                    return dateB - dateA;
+                });
+                
+                // Сохраняем обновленные данные локально
+                localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
+                
+                // Обновляем интерфейс
+                renderRepairTable();
+                updateSummary();
+                applyFilters();
+                
+            }, (error) => {
+                console.error('Ошибка подписки Firestore:', error.code, error.message);
+                
+                if (error.code === 'permission-denied') {
+                    console.error('Нет прав для прослушивания изменений в Firestore');
+                    showNotification('Нет прав для синхронизации в реальном времени', 'error');
+                } else if (error.code === 'failed-precondition') {
+                    console.error('Требуется индекс для запроса в реальном времени');
+                    showNotification('Требуется создать индекс в Firebase консоли', 'warning');
+                } else {
+                    showNotification('Ошибка синхронизации с облаком', 'error');
+                }
+                
+                // Отключаем подписку при ошибке
+                if (firestoreUnsubscribe) {
+                    firestoreUnsubscribe();
+                    firestoreUnsubscribe = null;
                 }
             });
             
-            // Сохраняем обновленные данные локально
-            localStorage.setItem(STORAGE_KEYS.REPAIR_REQUESTS, JSON.stringify(repairRequests));
-            
-            // Обновляем интерфейс
-            renderRepairTable();
-            updateSummary();
-            applyFilters();
-            
-            console.log('Данные обновлены в реальном времени. Заявок:', repairRequests.length);
-            
-        }, (error) => {
-            console.error('Ошибка подписки Firestore:', error);
-            showNotification('Ошибка синхронизации с облаком', 'error');
-        });
+        console.log('Подписка на обновления Firestore настроена');
+        
+    } catch (error) {
+        console.error('Ошибка настройки подписки Firestore:', error);
+    }
 }
 
 // Загрузка локальных данных
@@ -435,8 +586,11 @@ async function loadRepairRequestsFromLocal() {
 // Синхронизация всех данных
 window.syncAllData = async function() {
     if (!isFirebaseInitialized) {
-        showNotification('Firebase не инициализирован. Проверьте соединение.', 'error');
-        return;
+        const initialized = await initializeFirebase();
+        if (!initialized) {
+            showNotification('Firebase не инициализирован. Проверьте соединение и правила безопасности.', 'error');
+            return;
+        }
     }
     
     showNotification('Начата синхронизация данных...', 'info');
@@ -630,9 +784,15 @@ window.deleteRequest = async function(id) {
             return;
         }
         
-        // Удаляем из Firebase если есть firebaseId
+        // Удаляем из Firebase если есть firebaseId и есть доступ
         if (request.firebaseId && isFirebaseInitialized && firestore) {
-            await firestore.collection('repair_requests').doc(request.firebaseId).delete();
+            try {
+                await firestore.collection('repair_requests').doc(request.firebaseId).delete();
+                console.log('Заявка удалена из Firebase:', request.firebaseId);
+            } catch (firebaseError) {
+                console.warn('Не удалось удалить заявку из Firebase:', firebaseError.message);
+                showNotification('Заявка удалена локально, но не из облака (нет прав)', 'warning');
+            }
         }
         
         // Удаляем локально
@@ -699,7 +859,7 @@ window.completeRequest = async function(id) {
     // Синхронизируем с Firebase
     if (request.firebaseId && isFirebaseInitialized && firestore) {
         try {
-            await firestore.collection('repair_requests').doc(request.firebaseId).update({
+            const updateData = {
                 status: 'completed',
                 repairEndDate: repairEndDate,
                 repairEndTime: repairEndTime,
@@ -707,13 +867,15 @@ window.completeRequest = async function(id) {
                 downtimeHours: downtimeHours,
                 updatedAt: new Date().toISOString(),
                 completedBy: currentUser.name
-            });
+            };
+            
+            await firestore.collection('repair_requests').doc(request.firebaseId).update(updateData);
             
             request.synced = true;
             showNotification('Ремонт завершен и синхронизирован!', 'success');
         } catch (error) {
             console.error('Ошибка обновления в Firebase:', error);
-            showNotification('Ремонт завершен локально', 'warning');
+            showNotification('Ремонт завершен локально. Синхронизация при восстановлении связи.', 'warning');
         }
     } else {
         showNotification('Ремонт завершен локально', 'success');
@@ -729,15 +891,25 @@ window.logout = function() {
         // Отписываемся от обновлений
         if (firestoreUnsubscribe) {
             firestoreUnsubscribe();
+            firestoreUnsubscribe = null;
         }
         
         // Выход из Firebase
-        if (auth) {
+        if (auth && auth.currentUser) {
             auth.signOut();
         }
         
+        // Сбрасываем флаги Firebase
+        isFirebaseInitialized = false;
+        firebaseInitializationAttempted = false;
+        
+        // Удаляем данные пользователя
         localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
         localStorage.removeItem(STORAGE_KEYS.AUTH_STATUS);
+        
+        // Сбрасываем флаг инициализации приложения
+        appInitialized = false;
+        
         redirectToLogin();
     }
 };
@@ -1681,7 +1853,16 @@ function redirectToLogin() {
     // Отписываемся от обновлений Firebase перед переходом
     if (firestoreUnsubscribe) {
         firestoreUnsubscribe();
+        firestoreUnsubscribe = null;
     }
+    
+    // Сбрасываем флаги Firebase
+    isFirebaseInitialized = false;
+    firebaseInitializationAttempted = false;
+    
+    // Сбрасываем флаг инициализации приложения
+    appInitialized = false;
+    initializationInProgress = false;
     
     setTimeout(() => {
         window.location.href = 'login.html';
@@ -1965,13 +2146,12 @@ window.addEventListener('error', function(e) {
     showNotification('Произошла ошибка в приложении', 'error');
 });
 
-// Инициализация при полной загрузке
-window.addEventListener('load', function() {
-    console.log('Окно полностью загружено');
-    
-    // Проверяем, находимся ли мы на GitHub Pages
-    if (window.location.href.includes('github.io')) {
-        console.log('Работаем на GitHub Pages');
+// Предотвращение повторной инициализации при перезагрузке страницы
+window.addEventListener('beforeunload', function() {
+    // Отписываемся от обновлений Firebase
+    if (firestoreUnsubscribe) {
+        firestoreUnsubscribe();
+        firestoreUnsubscribe = null;
     }
 });
 
