@@ -1,4 +1,4 @@
-const CACHE_NAME = 'repair-journal-v4.2.0';
+const CACHE_NAME = 'repair-journal-v5.0.1';
 const urlsToCache = [
   './',
   './index.html',
@@ -6,21 +6,20 @@ const urlsToCache = [
   './style.css',
   './javascript.js',
   './auth.js',
+  './firebase-config.js',
   './manifest.json',
   './404.html'
 ];
 
 // Установка Service Worker
 self.addEventListener('install', event => {
-  console.log('[Service Worker] Установка v4.2.0...');
+  console.log('[Service Worker] Установка v5.0.1...');
   
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[Service Worker] Кэширование файлов v4.2.0');
-        return cache.addAll(urlsToCache).catch(error => {
-          console.error('[Service Worker] Ошибка кэширования:', error);
-        });
+        console.log('[Service Worker] Кэширование файлов v5.0.1');
+        return cache.addAll(urlsToCache);
       })
       .then(() => self.skipWaiting())
   );
@@ -28,7 +27,7 @@ self.addEventListener('install', event => {
 
 // Активация Service Worker
 self.addEventListener('activate', event => {
-  console.log('[Service Worker] Активация v4.2.0...');
+  console.log('[Service Worker] Активация v5.0.1...');
   
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -40,10 +39,7 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    }).then(() => {
-      console.log('[Service Worker] Claiming clients');
-      return self.clients.claim();
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
@@ -51,8 +47,10 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   
-  // Пропускаем запросы к внешним ресурсам
-  if (!url.origin.startsWith(self.location.origin)) {
+  // Пропускаем запросы к Firebase и внешним ресурсам
+  if (url.hostname.includes('firebase') || 
+      url.hostname.includes('googleapis') ||
+      url.hostname.includes('gstatic')) {
     return;
   }
   
@@ -61,7 +59,6 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          // Клонируем ответ для кэша
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, responseClone);
@@ -85,14 +82,11 @@ self.addEventListener('fetch', event => {
         
         return fetch(event.request)
           .then(response => {
-            // Проверяем валидность ответа
             if (!response || response.status !== 200) {
               return response;
             }
             
-            // Клонируем ответ для кэша
             const responseToCache = response.clone();
-            
             caches.open(CACHE_NAME)
               .then(cache => {
                 cache.put(event.request, responseToCache);
@@ -100,17 +94,23 @@ self.addEventListener('fetch', event => {
             
             return response;
           })
-          .catch(error => {
-            console.error('[Service Worker] Ошибка fetch:', error);
-            // Если страница не найдена, возвращаем index.html
+          .catch(() => {
+            // Для навигационных запросов возвращаем index.html
             if (event.request.mode === 'navigate') {
               return caches.match('./index.html');
             }
-            return new Response('Ошибка сети', {
+            return new Response('Офлайн режим', {
               status: 503,
               headers: { 'Content-Type': 'text/plain' }
             });
           });
       })
   );
+});
+
+// Получение сообщений от главного потока
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
