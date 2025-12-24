@@ -719,7 +719,6 @@
                         <th class="col-count">Кол-во простоев</th>
                         <th class="col-hours">Время простоя (часы)</th>
                         <th>Номенклатура продукции</th>
-                        <th>Синхронизация</th>
                         <th class="col-actions">Действия</th>
                     </tr>
                 </thead>
@@ -761,10 +760,13 @@
         display: none;
     " title="Принудительное обновление">↻</button>
 
-    <!-- Подключаем Firebase -->
+    <!-- Подключаем Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    
+    <!-- Конфигурация Firebase -->
+    <script src="firebase-config.js"></script>
     
     <!-- Основная логика приложения -->
     <script src="javascript.js"></script>
@@ -787,26 +789,20 @@
 
         // Проверка авторизации при загрузке
         document.addEventListener('DOMContentLoaded', async function() {
-            const loadingStatus = document.getElementById('loadingStatus');
-            loadingStatus.textContent = 'Проверка авторизации и подключение к облаку...';
+            const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
+            const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
 
-            setTimeout(async function() {
-                const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
-                const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
-
-                if (!isAuthenticated || !currentUser) {
-                    loadingStatus.textContent = 'Перенаправление на страницу входа...';
-                    window.location.href = 'login.html';
-                } else {
-                    // Инициализируем приложение
-                    if (typeof initApp === 'function') {
-                        await initApp(); // Ожидаем инициализации
-                    }
-                    // Показываем контент
-                    document.getElementById('loadingScreen').style.display = 'none';
-                    document.getElementById('mainContainer').style.display = 'block';
-                }
-            }, 1000);
+            if (!isAuthenticated || !currentUser) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // Даем время на инициализацию Firebase
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Показываем контент
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
         });
 
         // Функция для обновления сообщения о синхронизации
@@ -816,6 +812,7 @@
             if (!syncMessage || !syncMessageText) return;
             syncMessage.style.display = 'none';
         }
+        
         setInterval(updateSyncMessage, 300000);
         setTimeout(updateSyncMessage, 2000);
     </script>
