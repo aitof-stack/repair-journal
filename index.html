@@ -719,6 +719,7 @@
                         <th class="col-count">Кол-во простоев</th>
                         <th class="col-hours">Время простоя (часы)</th>
                         <th>Номенклатура продукции</th>
+                        <th>Синхронизация</th>
                         <th class="col-actions">Действия</th>
                     </tr>
                 </thead>
@@ -760,68 +761,63 @@
         display: none;
     " title="Принудительное обновление">↻</button>
 
+    <!-- Подключаем Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    
+    <!-- Основная логика приложения -->
     <script src="javascript.js"></script>
     
-<!-- Подключаем новый конфигурационный файл Firebase как МОДУЛЬ -->
-<script type="module" src="firebase-config.js"></script>
-<!-- Основная логика приложения -->
-<script src="javascript.js"></script>
+    <!-- Инициализация приложения -->
+    <script>
+        // Регистрация Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(function(registration) {
+                        console.log('Service Worker зарегистрирован:', registration.scope);
+                        registration.update();
+                    })
+                    .catch(function(error) {
+                        console.log('Ошибка регистрации Service Worker:', error);
+                    });
+            });
+        }
 
-<script>
-    // Регистрация Service Worker
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-            navigator.serviceWorker.register('service-worker.js')
-                .then(function(registration) {
-                    console.log('Service Worker зарегистрирован:', registration.scope);
-                    registration.update();
-                })
-                .catch(function(error) {
-                    console.log('Ошибка регистрации Service Worker:', error);
-                });
-        });
-    }
+        // Проверка авторизации при загрузке
+        document.addEventListener('DOMContentLoaded', async function() {
+            const loadingStatus = document.getElementById('loadingStatus');
+            loadingStatus.textContent = 'Проверка авторизации и подключение к облаку...';
 
-    // Проверка авторизации при загрузке
-    document.addEventListener('DOMContentLoaded', async function() {
-        const loadingStatus = document.getElementById('loadingStatus');
-        loadingStatus.textContent = 'Проверка авторизации и подключение к облаку...';
+            setTimeout(async function() {
+                const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
+                const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
 
-        setTimeout(async function() {
-            const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
-            const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
-
-            if (!isAuthenticated || !currentUser) {
-                loadingStatus.textContent = 'Перенаправление на страницу входа...';
-                window.location.href = 'login.html';
-            } else {
-                // Инициализируем приложение
-                if (typeof initApp === 'function') {
-                    await initApp(); // Ожидаем инициализации
+                if (!isAuthenticated || !currentUser) {
+                    loadingStatus.textContent = 'Перенаправление на страницу входа...';
+                    window.location.href = 'login.html';
+                } else {
+                    // Инициализируем приложение
+                    if (typeof initApp === 'function') {
+                        await initApp(); // Ожидаем инициализации
+                    }
+                    // Показываем контент
+                    document.getElementById('loadingScreen').style.display = 'none';
+                    document.getElementById('mainContainer').style.display = 'block';
                 }
-                // Показываем контент
-                document.getElementById('loadingScreen').style.display = 'none';
-                document.getElementById('mainContainer').style.display = 'block';
-            }
-        }, 1000);
-    });
+            }, 1000);
+        });
 
-    // Функция для обновления сообщения о синхронизации (упрощена, так как теперь синхронизация в реальном времени)
-    function updateSyncMessage() {
-        const syncMessage = document.getElementById('syncMessage');
-        const syncMessageText = document.getElementById('syncMessageText');
-        if (!syncMessage || !syncMessageText) return;
-        syncMessage.style.display = 'none'; // Сообщение не нужно при работе через Firestore
-    }
-    setInterval(updateSyncMessage, 300000);
-    setTimeout(updateSyncMessage, 2000);
-</script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
-
-<!-- Основной скрипт -->
-<script src="javascript.js"></script>
+        // Функция для обновления сообщения о синхронизации
+        function updateSyncMessage() {
+            const syncMessage = document.getElementById('syncMessage');
+            const syncMessageText = document.getElementById('syncMessageText');
+            if (!syncMessage || !syncMessageText) return;
+            syncMessage.style.display = 'none';
+        }
+        setInterval(updateSyncMessage, 300000);
+        setTimeout(updateSyncMessage, 2000);
+    </script>
 </body>
 </html>
