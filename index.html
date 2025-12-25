@@ -346,19 +346,6 @@
             background-color: #f9f9f9;
         }
         
-        /* Стили для строк в ремонте */
-        .repair-in-progress {
-            background-color: #fff3cd !important;
-            border-left: 4px solid #ffc107;
-            font-weight: 600;
-        }
-        
-        .repair-in-progress:hover {
-            background-color: #ffeaa7 !important;
-            transform: translateY(-1px);
-            box-shadow: 0 3px 8px rgba(0,0,0,0.1);
-        }
-        
         .col-datetime { min-width: 160px; }
         .col-location { min-width: 80px; }
         .col-inv { min-width: 100px; }
@@ -482,7 +469,7 @@
         }
         
         .sync-indicator.error {
-            background-color: #f44336;
+            background-color: #F44336;
         }
         
         @keyframes pulse {
@@ -507,7 +494,7 @@
         
         .sync-message.error {
             background-color: #ffebee;
-            border-left-color: #f44336;
+            border-left-color: #F44336;
         }
         
         .sync-message.warning {
@@ -782,22 +769,93 @@
     <script src="firebase-config.js"></script>
     
     <!-- Основная логика приложения -->
-    <script src="javascript.js?v=5.0.6"></script>
+    <script src="javascript.js"></script>
     
     <!-- Инициализация приложения -->
-<script>
-    // Принудительное обновление Service Worker
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistration().then(registration => {
-            if (registration) {
-                registration.update().then(() => {
-                    console.log('Service Worker принудительно обновлен');
-                    // Перезагружаем страницу
-                    setTimeout(() => location.reload(), 1000);
-                });
+    <!-- Инициализация приложения -->
+    <script>
+        // Флаг для предотвращения повторной инициализации
+        let pageInitialized = false;
+        let initTimeout = null;
+        
+        // Регистрация Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(function(registration) {
+                        console.log('Service Worker зарегистрирован:', registration.scope);
+                        registration.update();
+                    })
+                    .catch(function(error) {
+                        console.log('Ошибка регистрации Service Worker:', error);
+                    });
+            });
+        }
+
+        // Основная функция инициализации страницы
+        function initializePage() {
+            // Защита от повторной инициализации
+            if (pageInitialized) {
+                console.log('Страница уже инициализирована');
+                return;
             }
+            
+            pageInitialized = true;
+            
+            const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
+            const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
+
+            if (!isAuthenticated || !currentUser) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            console.log('Пользователь авторизован:', currentUser.name);
+            
+            // Очищаем таймаут, если он был установлен
+            if (initTimeout) {
+                clearTimeout(initTimeout);
+                initTimeout = null;
+            }
+            
+            // Показываем контент с небольшой задержкой
+            setTimeout(() => {
+                const loadingScreen = document.getElementById('loadingScreen');
+                const mainContainer = document.getElementById('mainContainer');
+                
+                if (loadingScreen) {
+                    loadingScreen.style.display = 'none';
+                }
+                if (mainContainer) {
+                    mainContainer.style.display = 'block';
+                }
+            }, 300);
+        }
+
+        // Инициализация при загрузке DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM загружен, начинаем инициализацию страницы...');
+            
+            // Устанавливаем таймаут на случай проблем с инициализацией
+            initTimeout = setTimeout(() => {
+                console.log('Таймаут инициализации страницы, принудительно показываем контент');
+                initializePage();
+            }, 10000); // 10 секунд таймаут
+            
+            // Немедленная инициализация
+            initializePage();
         });
-    }
-</script>
+
+        // Функция для обновления сообщения о синхронизации
+        function updateSyncMessage() {
+            const syncMessage = document.getElementById('syncMessage');
+            const syncMessageText = document.getElementById('syncMessageText');
+            if (!syncMessage || !syncMessageText) return;
+            syncMessage.style.display = 'none';
+        }
+        
+        setInterval(updateSyncMessage, 300000);
+        setTimeout(updateSyncMessage, 2000);
+    </script>
 </body>
 </html>
