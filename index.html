@@ -346,6 +346,19 @@
             background-color: #f9f9f9;
         }
         
+        /* Стили для строк в ремонте */
+        .repair-in-progress {
+            background-color: #fff3cd !important;
+            border-left: 4px solid #ffc107;
+            font-weight: 600;
+        }
+        
+        .repair-in-progress:hover {
+            background-color: #ffeaa7 !important;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+        }
+        
         .col-datetime { min-width: 160px; }
         .col-location { min-width: 80px; }
         .col-inv { min-width: 100px; }
@@ -469,7 +482,7 @@
         }
         
         .sync-indicator.error {
-            background-color: #F44336;
+            background-color: #f44336;
         }
         
         @keyframes pulse {
@@ -494,7 +507,7 @@
         
         .sync-message.error {
             background-color: #ffebee;
-            border-left-color: #F44336;
+            border-left-color: #f44336;
         }
         
         .sync-message.warning {
@@ -771,7 +784,6 @@
     <!-- Основная логика приложения -->
     <script src="javascript.js"></script>
     
-    <!-- Инициализация приложения -->
     <!-- Инициализация приложения -->
     <script>
         // Флаг для предотвращения повторной инициализации
