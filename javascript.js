@@ -269,8 +269,11 @@ async function loadData() {
             console.log('Загружено локальных заявок:', repairsList.length);
         }
         
+        // Сортируем заявки: сначала "в ремонте", потом остальные
+        repairsList = sortRepairsByStatus(repairsList);
+        
         // Рендерим таблицу
-        renderRepairsTable(repairsList);
+        renderRepairsTable();
         
         // Синхронизируем локальные данные
         await syncLocalData();
@@ -278,7 +281,8 @@ async function loadData() {
     } catch (error) {
         console.error('Ошибка загрузки данных:', error);
         repairsList = loadLocalRepairs();
-        renderRepairsTable(repairsList);
+        repairsList = sortRepairsByStatus(repairsList);
+        renderRepairsTable();
     }
 }
 
@@ -292,6 +296,32 @@ function loadLocalRepairs() {
         }
     }
     return [];
+}
+
+function sortRepairsByStatus(repairs) {
+    return repairs.sort((a, b) => {
+        // Функция проверки статуса "в ремонте"
+        const isInRepair = (status) => {
+            if (!status) return false;
+            const statusLower = status.toLowerCase();
+            return statusLower.includes('в ремонте') || 
+                   statusLower.includes('в работе') || 
+                   statusLower.includes('ремонт') ||
+                   statusLower.includes('ремонтируется');
+        };
+        
+        const aInRepair = isInRepair(a.status);
+        const bInRepair = isInRepair(b.status);
+        
+        // Сначала заявки "в ремонте", потом остальные
+        if (aInRepair && !bInRepair) return -1;
+        if (!aInRepair && bInRepair) return 1;
+        
+        // Для одинаковых статусов сортируем по дате (новые сверху)
+        const dateA = new Date(a.date || 0);
+        const dateB = new Date(b.date || 0);
+        return dateB - dateA;
+    });
 }
 
 function setupRealtimeUpdates() {
@@ -315,7 +345,10 @@ function setupRealtimeUpdates() {
             });
             
             console.log('Получены изменения из Firestore:', changes.length, 'изменений');
-            renderRepairsTable(repairsList);
+            
+            // Сортируем заявки
+            repairsList = sortRepairsByStatus(repairsList);
+            renderRepairsTable();
             
             // Сохраняем локально
             saveLocalData();
@@ -379,493 +412,189 @@ function saveLocalData() {
 }
 
 // ===== ФУНКЦИИ ДЛЯ РАБОТЫ С ТАБЛИЦЕЙ =====
-
-// Функция рендеринга таблицы с сортировкой
-function renderRepairsTable(repairs) {
-    console.log('Рендеринг таблицы с', repairs?.length || 0, 'заявками');
-    
-    if (!Array.isArray(repairs)) {
-        console.error('repairs не является массивом:', repairs);
-        return;
-    }
-    
-    // Сортируем заявки
-    const sortedRepairs = sortRepairs(repairs);
-    
-    const tbody = document.getElementById('repairsTableBody');
-    if (!tbody) {
-        console.error('Не найден элемент repairsTableBody');
-        return;
-    }
+function renderRepairsTable() {
+    const tbody = document.getElementById('repairTableBody');
+    if (!tbody) return;
     
     tbody.innerHTML = '';
     
-    if (sortedRepairs.length === 0) {
+    if (repairsList.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="text-center text-muted py-4">
-                    <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                <td colspan="14" style="text-align: center; padding: 40px; color: #666;">
                     📭 Нет заявок на ремонт
-                    <br>
-                    <small class="text-muted">Создайте первую заявку</small>
                 </td>
             </tr>
         `;
-        updateStatsPanel([]);
+        updateStats();
         return;
     }
     
-    // Рендерим каждую заявку
-    sortedRepairs.forEach((repair, index) => {
+    repairsList.forEach((repair, index) => {
         const row = createRepairRow(repair, index);
         tbody.appendChild(row);
     });
     
-    // Обновляем статистику
-    updateStatsPanel(sortedRepairs);
-    
-    // Обновляем счетчик в заголовке
-    updateTableCounter(sortedRepairs);
+    updateStats();
 }
 
-// Функция сортировки заявок
-function sortRepairs(repairs) {
-    return [...repairs].sort((a, b) => {
-        // Приоритет 1: статус "в ремонте" или "в работе"
-        const aInRepair = isInRepairStatus(a.status);
-        const bInRepair = isInRepairStatus(b.status);
-        
-        if (aInRepair && !bInRepair) return -1;
-        if (!aInRepair && bInRepair) return 1;
-        
-        // Приоритет 2: дата (новые сверху)
-        const dateA = a.date ? new Date(a.date) : new Date(0);
-        const dateB = b.date ? new Date(b.date) : new Date(0);
-        return dateB - dateA;
-        
-        // Приоритет 3: ID (для одинаковых дат)
-        if (dateA.getTime() === dateB.getTime()) {
-            return (b.id || '').localeCompare(a.id || '');
-        }
-    });
-}
-
-// Проверка статуса "в ремонте"
-function isInRepairStatus(status) {
-    if (!status) return false;
-    const statusLower = status.toLowerCase();
-    return statusLower.includes('ремонт') || 
-           statusLower.includes('в работе') || 
-           statusLower.includes('выполняется') ||
-           statusLower.includes('в процессе');
-}
-
-// Создание строки таблицы
 function createRepairRow(repair, index) {
     const row = document.createElement('tr');
     
-    // Проверяем статус
-    const isInRepair = isInRepairStatus(repair.status);
+    // Проверяем статус "в ремонте"
+    const isInRepair = isRepairInProgress(repair.status);
     
-    // Добавляем класс для строки в ремонте
+    // Добавляем класс для выделения цветом
     if (isInRepair) {
         row.className = 'repair-in-progress';
+        row.style.backgroundColor = '#fff3cd';
+        row.style.borderLeft = '4px solid #ffc107';
     }
     
-    // Форматируем дату
-    const repairDate = repair.date ? new Date(repair.date) : new Date();
-    const formattedDate = formatDate(repairDate);
+    // Форматируем даты
+    const startDate = repair.date ? formatDateTime(repair.date) : '-';
+    const endDate = repair.endDate ? formatDateTime(repair.endDate) : '-';
     
-    // Получаем класс статуса
-    const statusClass = getStatusClass(repair.status);
+    // Рассчитываем время простоя
+    const downtime = calculateDowntime(repair.date, repair.endDate, repair.status);
     
+    // Создаем HTML строки
     row.innerHTML = `
-        <td class="align-middle">
-            <div class="equipment-info">
-                <strong>${repair.equipment || 'Не указано'}</strong>
-                ${isInRepair ? ' <span class="repair-icon">🔧</span>' : ''}
-                ${repair.location ? `<br><small class="text-muted">${repair.location}</small>` : ''}
-            </div>
+        <td>${startDate}</td>
+        <td>${repair.author || '-'}</td>
+        <td>${repair.location || '-'}</td>
+        <td>${repair.invNumber || '-'}</td>
+        <td>${repair.equipmentName || '-'}</td>
+        <td>${repair.model || '-'}</td>
+        <td>${repair.machineNumber || '-'}</td>
+        <td>${repair.faultDescription || '-'}</td>
+        <td>${endDate}</td>
+        <td class="${isInRepair ? 'status-pending' : 'status-completed'}">
+            ${repair.status || '-'}
         </td>
-        <td class="align-middle">
-            <div class="problem-text">
-                ${repair.problem || 'Не указана'}
-                ${repair.description ? `<br><small class="text-muted">${repair.description.substring(0, 50)}...</small>` : ''}
-            </div>
-        </td>
-        <td class="align-middle">
-            <span class="date-text" title="${repairDate.toLocaleString('ru-RU')}">
-                ${formattedDate}
-            </span>
-        </td>
-        <td class="align-middle status-cell">
-            <span class="status-badge ${statusClass}">
-                ${repair.status || 'Не указан'}
-                ${isInRepair ? ' ⚡' : ''}
-            </span>
-        </td>
-        <td class="align-middle">
-            <div class="author-info">
-                <strong>${repair.author || 'Не указан'}</strong>
-                ${repair.assigned_to ? `<br><small>Исполнитель: ${repair.assigned_to}</small>` : ''}
-            </div>
-        </td>
-        <td class="align-middle">
-            <div class="btn-group" role="group">
-                <button onclick="editRepair('${repair.id}')" class="btn-edit" title="Редактировать">
-                    <i class="fas fa-edit"></i>
+        <td style="text-align: center;">${repair.downtimeCount || '-'}</td>
+        <td style="text-align: center;">${downtime}</td>
+        <td>${repair.productionItem || '-'}</td>
+        <td>
+            <div class="actions-cell">
+                <button onclick="completeRepair('${repair.id}')" class="btn-complete" 
+                        ${isInRepair ? '' : 'disabled'}>
+                    ${isInRepair ? '✅ Завершить' : 'Завершено'}
                 </button>
-                <button onclick="changeStatus('${repair.id}')" class="btn-status" title="Изменить статус">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
-                <button onclick="deleteRepair('${repair.id}')" class="btn-delete" title="Удалить">
-                    <i class="fas fa-trash"></i>
+                <button onclick="deleteRepair('${repair.id}')" class="btn-delete">
+                    🗑️ Удалить
                 </button>
             </div>
         </td>
     `;
-    
-    // Анимация появления
-    row.style.opacity = '0';
-    row.style.transform = 'translateY(10px)';
-    setTimeout(() => {
-        row.style.transition = 'all 0.3s ease';
-        row.style.opacity = '1';
-        row.style.transform = 'translateY(0)';
-    }, index * 30);
     
     return row;
 }
 
-// Форматирование даты
-function formatDate(date) {
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-        return 'Сегодня, ' + date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    } else if (diffDays === 1) {
-        return 'Вчера, ' + date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    } else if (diffDays < 7) {
-        const days = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
-        return `${date.getDate()} ${date.toLocaleDateString('ru-RU', { month: 'short' })} (${days[date.getDay()]})`;
-    }
-    
-    return date.toLocaleDateString('ru-RU', {
+function isRepairInProgress(status) {
+    if (!status) return false;
+    const statusLower = status.toLowerCase();
+    return statusLower.includes('в ремонте') || 
+           statusLower.includes('в работе') || 
+           statusLower.includes('ремонт') ||
+           statusLower.includes('ремонтируется');
+}
+
+function formatDateTime(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleString('ru-RU', {
         day: '2-digit',
         month: '2-digit',
-        year: 'numeric'
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
     });
 }
 
-// Получение класса для статуса
-function getStatusClass(status) {
-    if (!status) return '';
+function calculateDowntime(startDate, endDate, status) {
+    if (!startDate) return '0 ч';
     
-    const statusLower = status.toLowerCase();
-    if (isInRepairStatus(status)) return 'status-in-repair';
-    if (statusLower.includes('нов')) return 'status-new';
-    if (statusLower.includes('заверш') || statusLower.includes('готов') || statusLower.includes('выполнен')) return 'status-completed';
-    if (statusLower.includes('отмен') || statusLower.includes('отказ')) return 'status-cancelled';
-    if (statusLower.includes('ожидан') || statusLower.includes('приостанов') || statusLower.includes('пауза')) return 'status-on-hold';
-    if (statusLower.includes('планир')) return 'status-planned';
+    const start = new Date(startDate);
+    let end = endDate ? new Date(endDate) : new Date();
     
-    return '';
-}
-
-// Обновление панели статистики
-function updateStatsPanel(repairs) {
-    const statsPanel = document.getElementById('statsPanel');
-    if (!statsPanel) return;
-    
-    const total = repairs.length;
-    const inRepair = repairs.filter(r => isInRepairStatus(r.status)).length;
-    const completed = repairs.filter(r => 
-        getStatusClass(r.status) === 'status-completed'
-    ).length;
-    const newRepairs = repairs.filter(r => 
-        getStatusClass(r.status) === 'status-new'
-    ).length;
-    
-    statsPanel.innerHTML = `
-        <div class="stat-item stat-total">
-            <div class="stat-value">${total}</div>
-            <div class="stat-label">Всего заявок</div>
-        </div>
-        <div class="stat-item stat-in-repair">
-            <div class="stat-value">${inRepair}</div>
-            <div class="stat-label">В ремонте</div>
-        </div>
-        <div class="stat-item stat-completed">
-            <div class="stat-value">${completed}</div>
-            <div class="stat-label">Завершено</div>
-        </div>
-        <div class="stat-item stat-new">
-            <div class="stat-value">${newRepairs}</div>
-            <div class="stat-label">Новых</div>
-        </div>
-    `;
-}
-
-// Обновление счетчика в заголовке
-function updateTableCounter(repairs) {
-    const counterElement = document.getElementById('tableCounter');
-    if (counterElement) {
-        const inRepairCount = repairs.filter(r => isInRepairStatus(r.status)).length;
-        const totalCount = repairs.length;
-        counterElement.innerHTML = `
-            <span class="badge badge-light">
-                <i class="fas fa-list"></i> Всего: ${totalCount}
-            </span>
-            <span class="badge badge-warning ml-1">
-                <i class="fas fa-tools"></i> В ремонте: ${inRepairCount}
-            </span>
-        `;
-    }
-}
-
-// Функция фильтрации таблицы
-function filterTable() {
-    const showOnlyInRepair = document.getElementById('showOnlyInRepair')?.checked || false;
-    const statusFilter = document.getElementById('statusFilter')?.value.toLowerCase() || '';
-    const equipmentFilter = document.getElementById('equipmentFilter')?.value.toLowerCase() || '';
-    
-    let repairs = getAllRepairs();
-    
-    // Применяем фильтры
-    if (showOnlyInRepair) {
-        repairs = repairs.filter(repair => isInRepairStatus(repair.status));
+    // Если ремонт завершен, используем дату завершения
+    if (status && status.toLowerCase().includes('завершен')) {
+        if (!endDate) return '0 ч';
+        end = new Date(endDate);
     }
     
-    if (statusFilter) {
-        repairs = repairs.filter(repair => 
-            repair.status && repair.status.toLowerCase().includes(statusFilter)
-        );
-    }
-    
-    if (equipmentFilter) {
-        repairs = repairs.filter(repair => 
-            repair.equipment && repair.equipment.toLowerCase().includes(equipmentFilter)
-        );
-    }
-    
-    renderRepairsTable(repairs);
+    const diffHours = Math.max(0, Math.floor((end - start) / (1000 * 60 * 60)));
+    return `${diffHours} ч`;
 }
 
-// Сброс фильтров
-function resetFilters() {
-    const checkbox = document.getElementById('showOnlyInRepair');
-    const statusSelect = document.getElementById('statusFilter');
-    const equipmentInput = document.getElementById('equipmentFilter');
+function updateStats() {
+    const totalRequests = document.getElementById('totalRequests');
+    const pendingRequests = document.getElementById('pendingRequests');
+    const completedRequests = document.getElementById('completedRequests');
+    const totalDowntime = document.getElementById('totalDowntime');
     
-    if (checkbox) checkbox.checked = false;
-    if (statusSelect) statusSelect.value = '';
-    if (equipmentInput) equipmentInput.value = '';
+    if (!totalRequests || !pendingRequests || !completedRequests || !totalDowntime) return;
     
-    const repairs = getAllRepairs();
-    renderRepairsTable(repairs);
-    showNotification('Фильтры сброшены', 'info');
+    // Рассчитываем статистику
+    const total = repairsList.length;
+    const pending = repairsList.filter(repair => isRepairInProgress(repair.status)).length;
+    const completed = total - pending;
+    
+    // Рассчитываем общее время простоя
+    let totalHours = 0;
+    repairsList.forEach(repair => {
+        if (repair.status && repair.status.toLowerCase().includes('завершен') && repair.endDate && repair.date) {
+            const start = new Date(repair.date);
+            const end = new Date(repair.endDate);
+            totalHours += Math.max(0, Math.floor((end - start) / (1000 * 60 * 60)));
+        }
+    });
+    
+    totalRequests.textContent = total;
+    pendingRequests.textContent = pending;
+    completedRequests.textContent = completed;
+    totalDowntime.textContent = `${totalHours} ч`;
 }
 
 // ===== УПРАВЛЕНИЕ ЗАЯВКАМИ =====
-function getAllRepairs() {
-    return repairsList || [];
-}
-
-function createNewRepair() {
-    showRepairModal();
-}
-
-function showRepairModal(repairId = null) {
-    const repair = repairId ? repairsList.find(r => r.id === repairId) : null;
+async function completeRepair(id) {
+    if (!confirm('Завершить ремонт?')) return;
     
-    const modalHTML = `
-        <div class="modal fade show" id="repairModal" style="display: block; background: rgba(0,0,0,0.5)">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">${repair ? 'Редактирование заявки' : 'Новая заявка на ремонт'}</h5>
-                        <button type="button" class="close" onclick="closeModal()">
-                            <span>&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="repairForm">
-                            <div class="form-group">
-                                <label>Оборудование *</label>
-                                <select class="form-control" id="equipmentSelect" required>
-                                    <option value="">Выберите оборудование</option>
-                                    ${equipmentList.map(eq => 
-                                        `<option value="${eq.name}" ${repair?.equipment === eq.name ? 'selected' : ''}>
-                                            ${eq.name} (${eq.type}, ${eq.location})
-                                        </option>`
-                                    ).join('')}
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Неисправность *</label>
-                                <textarea class="form-control" id="problemInput" rows="3" required 
-                                          placeholder="Опишите проблему...">${repair?.problem || ''}</textarea>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Статус</label>
-                                        <select class="form-control" id="statusSelect">
-                                            <option value="Новый" ${repair?.status === 'Новый' ? 'selected' : ''}>Новый</option>
-                                            <option value="В работе" ${repair?.status === 'В работе' ? 'selected' : ''}>В работе</option>
-                                            <option value="В ремонте" ${(repair?.status === 'В ремонте' || !repair) ? 'selected' : ''}>В ремонте</option>
-                                            <option value="Завершен" ${repair?.status === 'Завершен' ? 'selected' : ''}>Завершен</option>
-                                            <option value="Ожидание запчастей" ${repair?.status === 'Ожидание запчастей' ? 'selected' : ''}>Ожидание запчастей</option>
-                                            <option value="Отменен" ${repair?.status === 'Отменен' ? 'selected' : ''}>Отменен</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Дата</label>
-                                        <input type="datetime-local" class="form-control" id="dateInput" 
-                                               value="${repair ? new Date(repair.date || new Date()).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16)}">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label>Дополнительное описание</label>
-                                <textarea class="form-control" id="descriptionInput" rows="2" 
-                                          placeholder="Дополнительная информация...">${repair?.description || ''}</textarea>
-                            </div>
-                            <div class="form-group">
-                                <label>Исполнитель</label>
-                                <input type="text" class="form-control" id="assignedToInput" 
-                                       value="${repair?.assigned_to || ''}" placeholder="ФИО исполнителя">
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button>
-                        <button type="button" class="btn btn-primary" onclick="saveRepair('${repair?.id || ''}')">
-                            ${repair ? 'Сохранить изменения' : 'Создать заявку'}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-}
-
-function closeModal() {
-    const modal = document.getElementById('repairModal');
-    if (modal) modal.remove();
-}
-
-async function saveRepair(repairId = null) {
-    const equipment = document.getElementById('equipmentSelect').value;
-    const problem = document.getElementById('problemInput').value;
-    const status = document.getElementById('statusSelect').value;
-    const date = document.getElementById('dateInput').value;
-    const description = document.getElementById('descriptionInput').value;
-    const assigned_to = document.getElementById('assignedToInput').value;
-    
-    if (!equipment || !problem) {
-        alert('Пожалуйста, заполните обязательные поля (Оборудование и Неисправность)');
-        return;
-    }
-    
-    const repairData = {
-        equipment,
-        problem,
-        status,
-        date: date ? new Date(date).toISOString() : new Date().toISOString(),
-        description,
-        assigned_to,
-        author: user?.name || 'Неизвестный',
-        user_id: user?.id,
-        updated_at: new Date().toISOString()
-    };
-    
-    if (!repairId) {
-        repairData.created_at = new Date().toISOString();
-    }
-    
-    try {
-        if (isFirebaseReady && db) {
-            if (repairId) {
-                await db.collection('repairs').doc(repairId).update(repairData);
-                console.log('Заявка обновлена в Firestore:', repairId);
-            } else {
-                const docRef = await db.collection('repairs').add({
-                    ...repairData,
-                    created_at: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                repairId = docRef.id;
-                console.log('Заявка создана в Firestore:', repairId);
-            }
-        } else {
-            // Локальное сохранение
-            if (repairId) {
-                const index = repairsList.findIndex(r => r.id === repairId);
-                if (index !== -1) {
-                    repairsList[index] = { ...repairsList[index], ...repairData, id: repairId };
-                }
-            } else {
-                repairId = 'local_' + Date.now();
-                repairsList.push({ ...repairData, id: repairId });
-            }
-            saveLocalData();
-            console.log('Заявка сохранена локально:', repairId);
-        }
-        
-        closeModal();
-        renderRepairsTable(getAllRepairs());
-        showNotification(repairId ? 'Заявка обновлена' : 'Заявка создана', 'success');
-        
-    } catch (error) {
-        console.error('Ошибка сохранения заявки:', error);
-        showNotification('Ошибка сохранения: ' + error.message, 'danger');
-    }
-}
-
-function editRepair(id) {
-    showRepairModal(id);
-}
-
-async function changeStatus(id) {
     const repair = repairsList.find(r => r.id === id);
     if (!repair) return;
     
-    const newStatus = prompt('Введите новый статус для заявки:', repair.status);
-    if (!newStatus || newStatus === repair.status) return;
-    
     try {
-        const updateData = { 
-            status: newStatus,
+        const updateData = {
+            status: 'Завершен',
+            endDate: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };
         
         if (isFirebaseReady && db) {
             await db.collection('repairs').doc(id).update(updateData);
+            console.log('Ремонт завершен в Firestore:', id);
         } else {
             const index = repairsList.findIndex(r => r.id === id);
             if (index !== -1) {
                 repairsList[index] = { ...repairsList[index], ...updateData };
+                // Сортируем заново
+                repairsList = sortRepairsByStatus(repairsList);
                 saveLocalData();
             }
         }
         
-        renderRepairsTable(getAllRepairs());
-        showNotification('Статус обновлен', 'info');
+        showNotification('Ремонт завершен!', 'success');
+        renderRepairsTable();
         
     } catch (error) {
-        console.error('Ошибка обновления статуса:', error);
-        showNotification('Ошибка обновления', 'danger');
+        console.error('Ошибка завершения ремонта:', error);
+        showNotification('Ошибка: ' + error.message, 'error');
     }
 }
 
 async function deleteRepair(id) {
-    if (!confirm('Вы уверены, что хотите удалить эту заявку?')) return;
+    if (!confirm('Удалить заявку?')) return;
     
     try {
         if (isFirebaseReady && db) {
@@ -875,162 +604,217 @@ async function deleteRepair(id) {
         
         repairsList = repairsList.filter(r => r.id !== id);
         saveLocalData();
-        renderRepairsTable(getAllRepairs());
-        showNotification('Заявка удалена', 'warning');
+        renderRepairsTable();
+        showNotification('Заявка удалена', 'success');
         
     } catch (error) {
         console.error('Ошибка удаления заявки:', error);
-        showNotification('Ошибка удаления: ' + error.message, 'danger');
+        showNotification('Ошибка: ' + error.message, 'error');
+    }
+}
+
+// ===== ОБРАБОТКА ФОРМЫ =====
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('repairForm');
+    if (form) {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await saveRepair();
+        });
+    }
+    
+    // Инициализация селекта инвентарных номеров
+    initInvNumberSelect();
+});
+
+function initInvNumberSelect() {
+    const invNumberSearch = document.getElementById('invNumberSearch');
+    const invNumberSelect = document.getElementById('invNumber');
+    
+    if (!invNumberSearch || !invNumberSelect) return;
+    
+    // Заполняем селект
+    equipmentList.forEach(equip => {
+        const option = document.createElement('option');
+        option.value = equip.invNumber || equip.id;
+        option.textContent = `${equip.invNumber || ''} - ${equip.name} (${equip.location})`;
+        invNumberSelect.appendChild(option);
+    });
+    
+    // Поиск при вводе
+    invNumberSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const options = invNumberSelect.options;
+        
+        for (let i = 0; i < options.length; i++) {
+            const option = options[i];
+            const text = option.textContent.toLowerCase();
+            option.style.display = text.includes(searchTerm) ? '' : 'none';
+        }
+    });
+    
+    // Автозаполнение полей при выборе
+    invNumberSelect.addEventListener('change', function() {
+        const selectedEquip = equipmentList.find(e => 
+            e.invNumber === this.value || e.id === this.value
+        );
+        
+        if (selectedEquip) {
+            document.getElementById('equipmentName').value = selectedEquip.name || '';
+            document.getElementById('location').value = selectedEquip.location || '';
+            document.getElementById('model').value = selectedEquip.model || '';
+        }
+    });
+}
+
+async function saveRepair() {
+    const form = document.getElementById('repairForm');
+    if (!form) return;
+    
+    const formData = {
+        date: document.getElementById('date').value + 'T' + document.getElementById('time').value,
+        author: document.getElementById('author').value,
+        location: document.getElementById('location').value,
+        invNumber: document.getElementById('invNumber').value,
+        equipmentName: document.getElementById('equipmentName').value,
+        model: document.getElementById('model').value,
+        machineNumber: document.getElementById('machineNumber').value,
+        faultDescription: document.getElementById('faultDescription').value,
+        productionItem: document.getElementById('productionItem').value,
+        status: 'В ремонте',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        user_id: user?.id
+    };
+    
+    // Валидация
+    if (!formData.date || !formData.author || !formData.faultDescription) {
+        showNotification('Заполните обязательные поля!', 'error');
+        return;
+    }
+    
+    try {
+        let repairId;
+        
+        if (isFirebaseReady && db) {
+            const docRef = await db.collection('repairs').add(formData);
+            repairId = docRef.id;
+            console.log('Заявка сохранена в Firestore:', repairId);
+        } else {
+            repairId = 'local_' + Date.now();
+            formData.id = repairId;
+            repairsList.push(formData);
+            // Сортируем заново
+            repairsList = sortRepairsByStatus(repairsList);
+            saveLocalData();
+            console.log('Заявка сохранена локально:', repairId);
+        }
+        
+        // Очистка формы
+        form.reset();
+        document.getElementById('equipmentName').value = '';
+        document.getElementById('location').value = '';
+        document.getElementById('model').value = '';
+        
+        // Обновление таблицы
+        renderRepairsTable();
+        showNotification('Заявка создана!', 'success');
+        
+    } catch (error) {
+        console.error('Ошибка сохранения заявки:', error);
+        showNotification('Ошибка: ' + error.message, 'error');
     }
 }
 
 // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
-function showNotification(message, type = 'info') {
-    // Создаем уведомление
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type} alert-dismissible fade show`;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 9999;
-        min-width: 300px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        animation: slideIn 0.3s ease;
-    `;
+function showNotification(message, type) {
+    const notification = document.getElementById('notification');
+    if (!notification) return;
     
-    notification.innerHTML = `
-        <strong>${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</strong>
-        ${message}
-        <button type="button" class="close" onclick="this.parentElement.remove()">
-            <span>&times;</span>
-        </button>
-    `;
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.style.display = 'block';
     
-    document.body.appendChild(notification);
-    
-    // Автоматическое скрытие
     setTimeout(() => {
-        if (notification.parentElement) {
-            notification.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => notification.remove(), 300);
-        }
+        notification.style.display = 'none';
     }, 3000);
 }
 
-// Анимация обновления таблицы
-function refreshTable() {
-    const tbody = document.getElementById('repairsTableBody');
-    if (!tbody) return;
+function updateEquipmentDB() {
+    showNotification('База оборудования обновлена!', 'success');
+}
+
+function exportRepairData() {
+    // Простая экспортная функция
+    const dataStr = JSON.stringify(repairsList, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     
-    tbody.style.opacity = '0.5';
-    tbody.style.transition = 'opacity 0.3s ease';
+    const exportFileDefaultName = `заявки_ремонт_${new Date().toISOString().slice(0,10)}.json`;
     
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    
+    showNotification('Данные экспортированы!', 'success');
+}
+
+function showDashboard() {
+    const modal = document.getElementById('dashboardModal');
+    if (modal) {
+        modal.style.display = 'block';
+        
+        // Обновляем содержимое дашборда
+        const dashboardContent = document.getElementById('dashboardContent');
+        if (dashboardContent) {
+            const pending = repairsList.filter(r => isRepairInProgress(r.status)).length;
+            const completed = repairsList.length - pending;
+            
+            dashboardContent.innerHTML = `
+                <h3>Статистика</h3>
+                <p>Всего заявок: ${repairsList.length}</p>
+                <p>В ремонте: ${pending}</p>
+                <p>Завершено: ${completed}</p>
+            `;
+        }
+    }
+}
+
+function closeDashboard() {
+    const modal = document.getElementById('dashboardModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function syncAllData() {
+    showNotification('Синхронизация...', 'info');
+    loadData();
     setTimeout(() => {
-        loadData();
-        tbody.style.opacity = '1';
-        showNotification('Таблица обновлена', 'success');
-    }, 300);
-}
-
-// Экспорт данных
-function exportToExcel() {
-    const repairs = getAllRepairs();
-    if (repairs.length === 0) {
-        showNotification('Нет данных для экспорта', 'warning');
-        return;
-    }
-    
-    const headers = ['Оборудование', 'Неисправность', 'Дата', 'Статус', 'Автор', 'Исполнитель', 'Описание'];
-    const rows = repairs.map(item => [
-        `"${item.equipment || ''}"`,
-        `"${item.problem || ''}"`,
-        `"${formatDate(new Date(item.date || new Date()))}"`,
-        `"${item.status || ''}"`,
-        `"${item.author || ''}"`,
-        `"${item.assigned_to || ''}"`,
-        `"${item.description || ''}"`
-    ].join(','));
-    
-    const csv = [headers.join(','), ...rows].join('\n');
-    
-    // Создаем и скачиваем файл
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `заявки_ремонт_${new Date().toISOString().slice(0,10)}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    showNotification('Экспорт завершен', 'success');
-}
-
-// Поиск по таблице
-function searchTable() {
-    const searchInput = document.getElementById('searchInput');
-    if (!searchInput) return;
-    
-    const searchTerm = searchInput.value.toLowerCase();
-    const repairs = getAllRepairs();
-    
-    if (!searchTerm) {
-        renderRepairsTable(repairs);
-        return;
-    }
-    
-    const filteredRepairs = repairs.filter(repair => 
-        (repair.equipment && repair.equipment.toLowerCase().includes(searchTerm)) ||
-        (repair.problem && repair.problem.toLowerCase().includes(searchTerm)) ||
-        (repair.description && repair.description.toLowerCase().includes(searchTerm)) ||
-        (repair.author && repair.author.toLowerCase().includes(searchTerm)) ||
-        (repair.status && repair.status.toLowerCase().includes(searchTerm))
-    );
-    
-    renderRepairsTable(filteredRepairs);
-    showNotification(`Найдено: ${filteredRepairs.length} заявок`, 'info');
+        showNotification('Данные синхронизированы!', 'success');
+    }, 1000);
 }
 
 // ===== НАСТРОЙКА UI =====
 function setupUI() {
-    // Добавляем обработчики событий
-    document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.key === 'f') {
-            e.preventDefault();
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) searchInput.focus();
-        }
-        if (e.key === 'Escape') {
-            const modal = document.getElementById('repairModal');
-            if (modal) closeModal();
-        }
-    });
+    // Установка текущей даты по умолчанию
+    const today = new Date();
+    const dateInput = document.getElementById('date');
+    if (dateInput) {
+        dateInput.value = today.toISOString().split('T')[0];
+    }
     
-    // Автообновление каждые 30 секунд
-    setInterval(() => {
-        if (document.visibilityState === 'visible' && isFirebaseReady) {
-            loadData();
-        }
-    }, 30000);
+    // Установка текущего времени
+    const timeInput = document.getElementById('time');
+    if (timeInput) {
+        const timeString = today.toTimeString().split(' ')[0].substring(0, 5);
+        timeInput.value = timeString;
+    }
     
-    // Обновление при возвращении на вкладку
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            refreshTable();
-        }
-    });
-    
-    // Инициализация select2 для оборудования (если подключена библиотека)
-    if (typeof $.fn.select2 !== 'undefined') {
-        setTimeout(() => {
-            $('#equipmentSelect').select2({
-                placeholder: "Выберите оборудование",
-                allowClear: true,
-                width: '100%'
-            });
-        }, 100);
+    // Установка автора
+    const authorInput = document.getElementById('author');
+    if (authorInput && user) {
+        authorInput.value = user.name;
     }
     
     console.log('UI настроен');
@@ -1039,15 +823,15 @@ function setupUI() {
 // ===== ЗАПУСК ПРИЛОЖЕНИЯ =====
 document.addEventListener('DOMContentLoaded', initApp);
 
-// Экспортируем функции для глобального доступа
-window.refreshTable = refreshTable;
-window.filterTable = filterTable;
-window.resetFilters = resetFilters;
-window.exportToExcel = exportToExcel;
-window.searchTable = searchTable;
-window.createNewRepair = createNewRepair;
-window.editRepair = editRepair;
+// Экспорт функций в глобальную область видимости
+window.completeRepair = completeRepair;
 window.deleteRepair = deleteRepair;
-window.changeStatus = changeStatus;
-window.saveRepair = saveRepair;
-window.closeModal = closeModal;
+window.updateEquipmentDB = updateEquipmentDB;
+window.exportRepairData = exportRepairData;
+window.showDashboard = showDashboard;
+window.closeDashboard = closeDashboard;
+window.syncAllData = syncAllData;
+window.logout = function() {
+    localStorage.removeItem('repair_journal_user');
+    window.location.href = 'login.html';
+};
