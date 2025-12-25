@@ -125,15 +125,26 @@ async function loadEquipmentDatabase() {
     console.log('Загрузка базы оборудования...');
     
     try {
-        // Используем локальную базу (можно заменить на Firestore)
-        equipmentList = [
-            // Пример данных - в реальности здесь 696 записей
-            { invNumber: "001", name: "Компьютер", location: "Офис 1", model: "HP Elite" },
-            { invNumber: "002", name: "Принтер", location: "Офис 2", model: "Canon MF" },
-            // ... остальные записи
-        ];
+        // Проверяем наличие локальной базы оборудования
+        const localEquipment = localStorage.getItem('equipment_database');
         
-        console.log('Используем локальную базу оборудования:', 696, 'записей');
+        if (localEquipment) {
+            equipmentList = JSON.parse(localEquipment);
+            console.log('Загружено оборудования из localStorage:', equipmentList.length, 'записей');
+        } else {
+            // Загружаем примерную базу
+            equipmentList = [
+                { invNumber: "001", name: "Компьютер", location: "Офис 1", model: "HP Elite" },
+                { invNumber: "002", name: "Принтер", location: "Офис 2", model: "Canon MF" },
+                { invNumber: "003", name: "Монитор", location: "Офис 3", model: "Dell 24\"" },
+                { invNumber: "004", name: "Сервер", location: "Серверная", model: "IBM System" },
+                { invNumber: "005", name: "Ноутбук", location: "Мобильный", model: "Lenovo ThinkPad" }
+            ];
+            
+            // Сохраняем локально
+            localStorage.setItem('equipment_database', JSON.stringify(equipmentList));
+            console.log('Создана локальная база оборудования:', equipmentList.length, 'записей');
+        }
         
         // Инициализация селекта инвентарных номеров
         initInvNumberSelect();
