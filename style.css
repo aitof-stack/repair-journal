@@ -1038,3 +1038,259 @@ tbody tr:hover {
         font-size: 24px;
     }
 }
+
+/* ===== СТИЛИ ДЛЯ ТАБЛИЦЫ ЗАЯВОК ===== */
+
+/* Стили для строк в ремонте */
+.repair-in-progress {
+    background-color: #fff3cd !important;
+    border-left: 4px solid #ffc107;
+    font-weight: 600;
+}
+
+.repair-in-progress:hover {
+    background-color: #ffeaa7 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+}
+
+/* Стили для статусов */
+.status-cell {
+    font-weight: bold;
+    text-align: center;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    display: inline-block;
+    min-width: 100px;
+    text-align: center;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.status-in-repair {
+    background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+    color: #856404;
+    border: none;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.4); }
+    70% { box-shadow: 0 0 0 6px rgba(255, 193, 7, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+}
+
+.status-new {
+    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    color: white;
+    border: none;
+}
+
+.status-completed {
+    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+    color: white;
+    border: none;
+}
+
+.status-cancelled {
+    background: linear-gradient(135deg, #6c757d 0%, #545b62 100%);
+    color: white;
+    border: none;
+}
+
+.status-on-hold {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    border: none;
+}
+
+/* Иконки действий в таблице */
+.btn-edit, .btn-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2em;
+    padding: 6px 8px;
+    margin: 0 2px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.btn-edit {
+    color: #007bff;
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.btn-edit:hover {
+    background-color: #007bff;
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 3px 6px rgba(0, 123, 255, 0.2);
+}
+
+.btn-delete {
+    color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.btn-delete:hover {
+    background-color: #dc3545;
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 3px 6px rgba(220, 53, 69, 0.2);
+}
+
+/* Панель фильтров */
+.filters-panel {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 10px;
+    padding: 15px 20px;
+    margin: 20px 0;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    border: 1px solid #dee2e6;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.filter-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #495057;
+}
+
+.filter-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #007bff;
+}
+
+.filter-select {
+    padding: 8px 15px;
+    border: 2px solid #ced4da;
+    border-radius: 6px;
+    background-color: white;
+    font-size: 14px;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 180px;
+}
+
+.filter-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+    outline: none;
+}
+
+/* Панель статистики */
+.stats-panel {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border-radius: 10px;
+    padding: 15px 20px;
+    margin: 20px 0;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    border: 1px solid #dee2e6;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 20px;
+    border-radius: 8px;
+    min-width: 120px;
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-in-repair {
+    background: rgba(255, 193, 7, 0.1);
+    border: 2px solid #ffc107;
+}
+
+.stat-total {
+    background: rgba(0, 123, 255, 0.1);
+    border: 2px solid #007bff;
+}
+
+.stat-completed {
+    background: rgba(40, 167, 69, 0.1);
+    border: 2px solid #28a745;
+}
+
+/* Заголовок таблицы */
+.table-header {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    color: white;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+}
+
+.table-header th {
+    padding: 12px 15px;
+    border: none;
+}
+
+/* Эффект загрузки */
+.loading-row {
+    animation: loading 1.5s infinite;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+}
+
+@keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .filter-group {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .filter-select {
+        width: 100%;
+    }
+    
+    .stats-panel {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .stat-item {
+        width: 100%;
+    }
+}
