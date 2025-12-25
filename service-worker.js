@@ -13,12 +13,12 @@ const urlsToCache = [
 
 // Установка Service Worker
 self.addEventListener('install', event => {
-  console.log('[Service Worker] Установка v5.0.1...');
+  console.log('[Service Worker] Установка v5.0.6...');
   
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[Service Worker] Кэширование файлов v5.0.1');
+        console.log('[Service Worker] Кэширование файлов v5.0.6');
         return cache.addAll(urlsToCache);
       })
       .then(() => self.skipWaiting())
@@ -27,7 +27,7 @@ self.addEventListener('install', event => {
 
 // Активация Service Worker
 self.addEventListener('activate', event => {
-  console.log('[Service Worker] Активация v5.0.1...');
+  console.log('[Service Worker] Активация v5.0.6...');
   
   event.waitUntil(
     caches.keys().then(cacheNames => {
