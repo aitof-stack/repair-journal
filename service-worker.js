@@ -4,7 +4,7 @@ const urlsToCache = [
   './index.html',
   './login.html',
   './style.css',
-  './javascript.js',
+  './javascript.js?v=5.0.6',
   './auth.js',
   './firebase-config.js',
   './manifest.json',
@@ -39,7 +39,10 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      console.log('[Service Worker] Очистка кэша выполнена');
+      return self.clients.claim();
+    })
   );
 });
 
@@ -50,62 +53,47 @@ self.addEventListener('fetch', event => {
   // Пропускаем запросы к Firebase и внешним ресурсам
   if (url.hostname.includes('firebase') || 
       url.hostname.includes('googleapis') ||
-      url.hostname.includes('gstatic')) {
-    return;
+      url.hostname.includes('gstatic') ||
+      url.hostname.includes('adguard')) {
+    return fetch(event.request);
   }
   
-  // Для CSV файлов используем Network First
-  if (event.request.url.includes('equipment_database.csv')) {
+  // Для локальных файлов используем Cache First
+  if (event.request.url.startsWith(self.location.origin)) {
     event.respondWith(
-      fetch(event.request)
+      caches.match(event.request)
         .then(response => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseClone);
-          });
-          return response;
-        })
-        .catch(() => {
-          return caches.match(event.request);
+          if (response) {
+            return response;
+          }
+          
+          return fetch(event.request)
+            .then(response => {
+              if (!response || response.status !== 200) {
+                return response;
+              }
+              
+              const responseToCache = response.clone();
+              caches.open(CACHE_NAME)
+                .then(cache => {
+                  cache.put(event.request, responseToCache);
+                });
+              
+              return response;
+            })
+            .catch(() => {
+              // Для навигационных запросов возвращаем index.html
+              if (event.request.mode === 'navigate') {
+                return caches.match('./index.html');
+              }
+              return new Response('Офлайн режим', {
+                status: 503,
+                headers: { 'Content-Type': 'text/plain' }
+              });
+            });
         })
     );
-    return;
   }
-  
-  // Для остальных файлов используем Cache First
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        
-        return fetch(event.request)
-          .then(response => {
-            if (!response || response.status !== 200) {
-              return response;
-            }
-            
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
-            
-            return response;
-          })
-          .catch(() => {
-            // Для навигационных запросов возвращаем index.html
-            if (event.request.mode === 'navigate') {
-              return caches.match('./index.html');
-            }
-            return new Response('Офлайн режим', {
-              status: 503,
-              headers: { 'Content-Type': 'text/plain' }
-            });
-          });
-      })
-  );
 });
 
 // Получение сообщений от главного потока
