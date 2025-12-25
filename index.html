@@ -785,63 +785,19 @@
     <script src="javascript.js?v=5.0.6"></script>
     
     <!-- Инициализация приложения -->
-    <script>
-    // Регистрация Service Worker
+<script>
+    // Принудительное обновление Service Worker
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-            navigator.serviceWorker.register('service-worker.js')
-                .then(function(registration) {
-                    console.log('Service Worker зарегистрирован:', registration.scope);
-                    
-                    // Принудительное обновление
-                    registration.update();
-                    
-                    // Отправляем сообщение для активации
-                    if (registration.waiting) {
-                        registration.waiting.postMessage('SKIP_WAITING');
-                    }
-                })
-                .catch(function(error) {
-                    console.log('Ошибка регистрации Service Worker:', error);
+        navigator.serviceWorker.getRegistration().then(registration => {
+            if (registration) {
+                registration.update().then(() => {
+                    console.log('Service Worker принудительно обновлен');
+                    // Перезагружаем страницу
+                    setTimeout(() => location.reload(), 1000);
                 });
+            }
         });
     }
-
-    // Основная функция инициализации страницы
-    function initializePage() {
-        const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
-        const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
-
-        if (!isAuthenticated || !currentUser) {
-            window.location.href = 'login.html';
-            return;
-        }
-        
-        console.log('Пользователь авторизован:', currentUser.name);
-        
-        // Показываем контент
-        setTimeout(() => {
-            const loadingScreen = document.getElementById('loadingScreen');
-            const mainContainer = document.getElementById('mainContainer');
-            
-            if (loadingScreen) {
-                loadingScreen.style.display = 'none';
-            }
-            if (mainContainer) {
-                mainContainer.style.display = 'block';
-            }
-        }, 500);
-    }
-
-    // Инициализация при загрузке DOM
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM загружен, начинаем инициализацию страницы...');
-        
-        // Даем время на загрузку Firebase
-        setTimeout(() => {
-            initializePage();
-        }, 1000);
-    });
 </script>
 </body>
 </html>
