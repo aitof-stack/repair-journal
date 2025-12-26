@@ -9,46 +9,41 @@ let deviceId = null;
 
 // ===== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ =====
 async function initApplication() {
-    console.log('Инициализация приложения v6.1');
+    console.log('Инициализация приложения v6.2');
     
     try {
-        // Инициализируем Firebase сервисы если нужно
-        if (typeof window.initializeFirebaseServices === 'function') {
-            await window.initializeFirebaseServices();
-        } else {
-            // Fallback: проверяем глобальные переменные
-            if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
-                window.db = firebase.firestore();
-                window.auth = firebase.auth();
-                window.isFirebaseReady = true;
+        // Инициализируем Firebase
+        if (typeof window.initializeFirebase === 'function') {
+            console.log('Запуск инициализации Firebase...');
+            const firebaseResult = await window.initializeFirebase();
+            
+            if (firebaseResult.success) {
+                console.log('Firebase инициализирован успешно');
+                showNotification('Firebase подключен', 'success');
+                
+                // Тестируем соединение (опционально)
+                try {
+                    const testResult = await window.testFirestoreConnection();
+                    if (testResult.success) {
+                        console.log('Соединение с Firestore подтверждено');
+                    }
+                } catch (testError) {
+                    console.warn('Тест соединения не удался:', testError);
+                }
+            } else {
+                console.warn('Firebase инициализирован с ошибкой:', firebaseResult.error);
+                showNotification('Офлайн режим: ' + firebaseResult.error, 'warning');
             }
-        }
-        // Устанавливаем глобальные переменные из window если они есть
-        if (typeof window.currentUser === 'undefined') {
-            const userData = localStorage.getItem('repair_journal_currentUser');
-            window.currentUser = userData ? JSON.parse(userData) : null;
-        }
-        
-        if (typeof window.isFirebaseReady === 'undefined') {
+        } else {
+            console.warn('Функция инициализации Firebase не найдена');
             window.isFirebaseReady = false;
+            showNotification('Работаем в офлайн-режиме', 'warning');
         }
         
-        if (typeof window.db === 'undefined') {
-            window.db = null;
-        }
-        
-        // Генерируем deviceId если нужно
-        if (!deviceId) {
-            deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            console.log('Device ID:', deviceId);
-        }
-        
-        // Проверяем Firebase доступность
-        if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
-            console.log('Firebase уже инициализирован в другом месте');
-            window.db = firebase.firestore();
-            window.auth = firebase.auth();
-            window.isFirebaseReady = true;
+        // Проверяем статус Firebase
+        if (window.checkFirebaseStatus) {
+            const status = window.checkFirebaseStatus();
+            console.log('Статус Firebase после инициализации:', status);
         }
         
         // Устанавливаем текущую дату и время в форму
@@ -73,7 +68,7 @@ async function initApplication() {
         
     } catch (error) {
         console.error('Ошибка инициализации:', error);
-        showNotification('Ошибка запуска приложения', 'error');
+        showNotification('Ошибка запуска приложения: ' + error.message, 'error');
         hideLoadingScreen();
     }
 }
@@ -257,6 +252,27 @@ function setupEquipmentSearch() {
 }
 
 // ===== ЗАГРУЗКА И ОТОБРАЖЕНИЕ ЗАЯВОК =====
+// Добавьте в глобальные функции:
+window.reconnectFirebase = async function() {
+    showNotification('Переподключение к Firebase...', 'info');
+    
+    if (typeof window.reinitializeFirebase === 'function') {
+        const result = await window.reinitializeFirebase();
+        
+        if (result.success) {
+            showNotification('Firebase переподключен успешно', 'success');
+            
+            // Перезагружаем данные
+            await loadRepairs();
+            await loadEquipmentDatabase();
+        } else {
+            showNotification('Ошибка переподключения: ' + (result.error || 'Неизвестная ошибка'), 'error');
+        }
+    } else {
+        showNotification('Функция переподключения не найдена', 'error');
+    }
+};
+
 async function loadRepairs() {
     console.log('Загрузка заявок...');
     
