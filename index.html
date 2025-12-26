@@ -847,7 +847,6 @@
         display: none;
     " title="Принудительное обновление">↻</button>
 
-    <!-- В самом конце body, перед закрывающим тегом </body> -->
     <!-- Подключаем Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -859,7 +858,7 @@
     <!-- Основная логика приложения -->
     <script src="javascript.js"></script>
     
-    <!-- Инициализация приложения -->
+    <!-- ТОЛЬКО Service Worker -->
     <script>
         // Регистрация Service Worker
         if ('serviceWorker' in navigator) {
@@ -873,28 +872,6 @@
                     });
             });
         }
-        
-        // Проверка и отображение контента
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM загружен...');
-            
-            const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
-            const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
-            
-            if (!isAuthenticated || !currentUser) {
-                window.location.href = 'login.html';
-                return;
-            }
-            
-            // Показываем основной контент
-            const loadingScreen = document.getElementById('loadingScreen');
-            const mainContainer = document.getElementById('mainContainer');
-            
-            if (loadingScreen) loadingScreen.style.display = 'none';
-            if (mainContainer) mainContainer.style.display = 'block';
-            
-            console.log('Пользователь:', currentUser.name);
-        });
     </script>
 </body>
 </html>
