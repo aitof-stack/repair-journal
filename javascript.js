@@ -325,20 +325,19 @@ function renderRepairsTable() {
     }
     
     // ВАЖНО: СОРТИРУЕМ - сначала заявки "в ремонте", потом остальные
-    const sortedRepairs = [...repairsList].sort((a, b) => {
-        // Проверяем статусы
-        const aInRepair = isInRepairStatus(a.status);
-        const bInRepair = isInRepairStatus(b.status);
-        
-        // Если одна заявка в ремонте, а другая нет - в ремонте должна быть выше
-        if (aInRepair && !bInRepair) return -1;
-        if (!aInRepair && bInRepair) return 1;
-        
-        // Если обе в ремонте или обе не в ремонте - сортируем по дате
-        const dateA = a.start_datetime ? new Date(a.start_datetime) : new Date(0);
-        const dateB = b.start_datetime ? new Date(b.start_datetime) : new Date(0);
-        return dateB - dateA; // Новые сверху
-    });
+   const sortedRepairs = [...repairsList].sort((a, b) => {
+    const aInRepair = isInRepairStatus(a.status);
+    const bInRepair = isInRepairStatus(b.status);
+    
+    // Заявки в ремонте должны быть выше
+    if (aInRepair && !bInRepair) return -1;
+    if (!aInRepair && bInRepair) return 1;
+    
+    // Остальные сортируются по дате
+    const dateA = a.start_datetime ? new Date(a.start_datetime) : new Date(0);
+    const dateB = b.start_datetime ? new Date(b.start_datetime) : new Date(0);
+    return dateB - dateA;
+});
     
     // Рендерим отсортированный список
     sortedRepairs.forEach((repair, index) => {
@@ -351,7 +350,6 @@ function renderRepairsTable() {
 
 function isInRepairStatus(status) {
     if (!status) return false;
-    
     const statusLower = status.toLowerCase();
     return statusLower.includes('ремонт') || 
            statusLower.includes('в работе') || 
@@ -364,14 +362,13 @@ function createRepairRow(repair, index) {
     
     // ВАЖНО: Определяем, находится ли заявка в ремонте
     const isInRepair = isInRepairStatus(repair.status);
-    
-    // ВАЖНО: Если заявка в ремонте - добавляем специальный класс
     if (isInRepair) {
         row.className = 'repair-in-progress';
         row.style.backgroundColor = '#fff3cd';
         row.style.borderLeft = '4px solid #ffc107';
         row.style.fontWeight = '600';
-    }
+}
+
     
     // Форматируем даты
     const startDate = repair.start_datetime ? new Date(repair.start_datetime) : null;
