@@ -1,42 +1,52 @@
-// javascript.js - Основная логика приложения v6.1
-console.log('Ремонтный журнал v6.1 загружен');
+// javascript.js - Основная логика приложения v6.2 (Исправленный)
+console.log('Ремонтный журнал v6.2 загружен');
 
 // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
 let repairsList = [];
 let equipmentList = [];
 let unsubscribeRepairs = null;
 let deviceId = null;
+let isFirestoreConnected = false;
 
 // ===== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ =====
 async function initApplication() {
     console.log('Инициализация приложения v6.2');
     
     try {
-        // Инициализируем Firebase
+        // Сначала загружаем базу оборудования локально
+        await loadEquipmentDatabase();
+        
+        // Затем инициализируем Firebase
         if (typeof window.initializeFirebase === 'function') {
             console.log('Запуск инициализации Firebase...');
+            updateLoadingStatus('Подключение к Firebase...');
+            
             const firebaseResult = await window.initializeFirebase();
             
             if (firebaseResult.success) {
                 console.log('Firebase инициализирован успешно');
+                isFirestoreConnected = true;
                 showNotification('Firebase подключен', 'success');
                 
-                // Тестируем соединение (опционально)
+                // Тестируем соединение
                 try {
                     const testResult = await window.testFirestoreConnection();
                     if (testResult.success) {
                         console.log('Соединение с Firestore подтверждено');
+                        updateLoadingStatus('Синхронизация данных...');
                     }
                 } catch (testError) {
                     console.warn('Тест соединения не удался:', testError);
                 }
             } else {
                 console.warn('Firebase инициализирован с ошибкой:', firebaseResult.error);
+                isFirestoreConnected = false;
                 showNotification('Офлайн режим: ' + firebaseResult.error, 'warning');
             }
         } else {
             console.warn('Функция инициализации Firebase не найдена');
             window.isFirebaseReady = false;
+            isFirestoreConnected = false;
             showNotification('Работаем в офлайн-режиме', 'warning');
         }
         
@@ -49,10 +59,8 @@ async function initApplication() {
         // Устанавливаем текущую дату и время в форму
         setDefaultFormDateTime();
         
-        // Загружаем базу оборудования
-        await loadEquipmentDatabase();
-        
-        // Загружаем заявки
+        // Загружаем заявки (из Firestore или локально)
+        updateLoadingStatus('Загрузка заявок...');
         await loadRepairs();
         
         // Настраиваем UI
@@ -62,6 +70,7 @@ async function initApplication() {
         updateStatistics();
         
         console.log('Приложение инициализировано успешно');
+        console.log('Статус подключения:', isFirestoreConnected ? 'ONLINE' : 'OFFLINE');
         
         // Скрываем экран загрузки
         hideLoadingScreen();
@@ -70,6 +79,13 @@ async function initApplication() {
         console.error('Ошибка инициализации:', error);
         showNotification('Ошибка запуска приложения: ' + error.message, 'error');
         hideLoadingScreen();
+    }
+}
+
+function updateLoadingStatus(message) {
+    const loadingStatus = document.getElementById('loadingStatus');
+    if (loadingStatus) {
+        loadingStatus.textContent = message;
     }
 }
 
@@ -109,11 +125,13 @@ function hideLoadingScreen() {
 // ===== БАЗА ОБОРУДОВАНИЯ =====
 async function loadEquipmentDatabase() {
     console.log('Загрузка базы оборудования...');
+    updateLoadingStatus('Загрузка базы оборудования...');
     
     try {
         // Пробуем загрузить из Firestore
-        if (window.isFirebaseReady && window.db) {
+        if (window.isFirebaseReady && window.db && isFirestoreConnected) {
             try {
+                console.log('Попытка загрузки оборудования из Firestore...');
                 const snapshot = await window.db.collection('equipment').limit(100).get();
                 if (!snapshot.empty) {
                     equipmentList = [];
@@ -123,13 +141,17 @@ async function loadEquipmentDatabase() {
                     console.log('Загружено из Firestore:', equipmentList.length);
                     populateEquipmentSelect();
                     return;
+                } else {
+                    console.log('Коллекция equipment в Firestore пуста');
                 }
             } catch (firestoreError) {
                 console.warn('Не удалось загрузить из Firestore:', firestoreError);
+                // Продолжаем загрузку из CSV
             }
         }
         
         // Загружаем из CSV
+        console.log('Загрузка оборудования из CSV...');
         const equipmentData = await loadEquipmentFromCSV();
         equipmentList = equipmentData;
         console.log('Загружено из CSV:', equipmentList.length);
@@ -252,7 +274,7 @@ function setupEquipmentSearch() {
 }
 
 // ===== ЗАГРУЗКА И ОТОБРАЖЕНИЕ ЗАЯВОК =====
-// Добавьте в глобальные функции:
+// Функция для переподключения Firebase
 window.reconnectFirebase = async function() {
     showNotification('Переподключение к Firebase...', 'info');
     
@@ -261,12 +283,14 @@ window.reconnectFirebase = async function() {
         
         if (result.success) {
             showNotification('Firebase переподключен успешно', 'success');
+            isFirestoreConnected = true;
             
             // Перезагружаем данные
-            await loadRepairs();
             await loadEquipmentDatabase();
+            await loadRepairs();
         } else {
             showNotification('Ошибка переподключения: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            isFirestoreConnected = false;
         }
     } else {
         showNotification('Функция переподключения не найдена', 'error');
@@ -277,9 +301,11 @@ async function loadRepairs() {
     console.log('Загрузка заявок...');
     
     try {
-        if (window.isFirebaseReady && window.db) {
+        if (window.isFirebaseReady && window.db && isFirestoreConnected) {
+            console.log('Попытка загрузки из Firestore...');
             await loadFromFirestore();
         } else {
+            console.log('Загрузка из localStorage...');
             loadFromLocalStorage();
         }
         
@@ -294,6 +320,7 @@ async function loadRepairs() {
 
 async function loadFromFirestore() {
     try {
+        console.log('Загрузка данных из Firestore...');
         const snapshot = await window.db.collection('repairs')
             .orderBy('created_at', 'desc')
             .get();
@@ -318,9 +345,20 @@ async function loadFromFirestore() {
         // Настраиваем подписку на обновления
         setupFirestoreListener();
         
+        // Сохраняем локально для офлайн-режима
+        saveToLocalStorage();
+        
     } catch (error) {
         console.error('Ошибка загрузки из Firestore:', error);
-        throw error;
+        
+        // Если ошибка, переключаемся в офлайн-режим
+        if (error.code === 'permission-denied' || error.code === 'unavailable') {
+            console.log('Доступ к Firestore запрещен или недоступен, переключаемся на localStorage');
+            isFirestoreConnected = false;
+            loadFromLocalStorage();
+        } else {
+            throw error;
+        }
     }
 }
 
@@ -331,7 +369,9 @@ function loadFromLocalStorage() {
 }
 
 function setupFirestoreListener() {
-    if (!window.isFirebaseReady || !window.db || unsubscribeRepairs) return;
+    if (!window.isFirebaseReady || !window.db || !isFirestoreConnected || unsubscribeRepairs) return;
+    
+    console.log('Настройка слушателя Firestore...');
     
     unsubscribeRepairs = window.db.collection('repairs')
         .orderBy('created_at', 'desc')
@@ -358,12 +398,14 @@ function setupFirestoreListener() {
         }, error => {
             console.error('Ошибка подписки Firestore:', error);
             showNotification('Ошибка синхронизации', 'error');
+            isFirestoreConnected = false;
         });
 }
 
 function saveToLocalStorage() {
     try {
         localStorage.setItem('repair_journal_repairs', JSON.stringify(repairsList));
+        console.log('Данные сохранены в localStorage');
     } catch (error) {
         console.error('Ошибка сохранения в localStorage:', error);
     }
@@ -580,7 +622,23 @@ function setupUI() {
     // Настраиваем обработчики кнопок
     setupButtonHandlers();
     
+    // Показываем статус подключения
+    updateConnectionStatus();
+    
     console.log('UI настроен');
+}
+
+function updateConnectionStatus() {
+    const statusElement = document.getElementById('connectionStatus');
+    if (!statusElement) return;
+    
+    if (isFirestoreConnected) {
+        statusElement.textContent = '🔥 ONLINE';
+        statusElement.className = 'connection-status';
+    } else {
+        statusElement.textContent = '📴 OFFLINE';
+        statusElement.className = 'connection-status offline';
+    }
 }
 
 function updateUserInfo() {
@@ -665,7 +723,8 @@ async function handleFormSubmit(event) {
         updated_at: new Date().toISOString(),
         created_by: window.currentUser.name,
         user_id: window.currentUser.id || 'anonymous',
-        synced: false
+        synced: false,
+        isOnline: isFirestoreConnected
     };
     
     // Проверка обязательных полей
@@ -677,26 +736,36 @@ async function handleFormSubmit(event) {
     try {
         let repairId;
         
-        if (window.isFirebaseReady && window.db) {
+        if (window.isFirebaseReady && window.db && isFirestoreConnected) {
             // Сохраняем в Firestore
-            const docRef = await window.db.collection('repairs').add({
-                ...formData,
-                created_at: firebase.firestore.FieldValue.serverTimestamp(),
-                updated_at: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            
-            repairId = docRef.id;
-            formData.id = repairId;
-            formData.firestoreId = repairId;
-            formData.synced = true;
-            
-            console.log('Заявка создана в Firestore:', repairId);
+            try {
+                const docRef = await window.db.collection('repairs').add({
+                    ...formData,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                repairId = docRef.id;
+                formData.id = repairId;
+                formData.firestoreId = repairId;
+                formData.synced = true;
+                
+                console.log('Заявка создана в Firestore:', repairId);
+            } catch (firestoreError) {
+                console.error('Ошибка сохранения в Firestore:', firestoreError);
+                // Сохраняем локально
+                repairId = 'local_' + Date.now();
+                formData.id = repairId;
+                formData.synced = false;
+                showNotification('Заявка сохранена локально (Firestore недоступен)', 'warning');
+            }
             
         } else {
             // Локальное сохранение
             repairId = 'local_' + Date.now();
             formData.id = repairId;
             formData.synced = false;
+            showNotification('Заявка сохранена локально (офлайн режим)', 'info');
         }
         
         // Добавляем в начало списка
@@ -924,16 +993,26 @@ async function completeRepair(repairId) {
             downtime_count: count,
             updated_at: new Date().toISOString(),
             completed_by: window.currentUser.name,
-            synced: false
+            synced: false,
+            isOnline: isFirestoreConnected
         };
         
-        if (window.isFirebaseReady && window.db && repair.firestoreId) {
+        if (window.isFirebaseReady && window.db && repair.firestoreId && isFirestoreConnected) {
             // Обновляем в Firestore
-            await window.db.collection('repairs').doc(repair.firestoreId).update({
-                ...updateData,
-                updated_at: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            updateData.synced = true;
+            try {
+                await window.db.collection('repairs').doc(repair.firestoreId).update({
+                    ...updateData,
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                updateData.synced = true;
+                console.log('Заявка обновлена в Firestore:', repair.firestoreId);
+            } catch (firestoreError) {
+                console.error('Ошибка обновления в Firestore:', firestoreError);
+                updateData.synced = false;
+                showNotification('Обновлено локально (Firestore недоступен)', 'warning');
+            }
+        } else {
+            showNotification('Обновлено локально (офлайн режим)', 'info');
         }
         
         // Обновляем локально
@@ -967,9 +1046,15 @@ async function deleteRepair(repairId) {
     try {
         const repair = repairsList.find(r => r.id === repairId);
         
-        if (window.isFirebaseReady && window.db && repair?.firestoreId) {
+        if (window.isFirebaseReady && window.db && repair?.firestoreId && isFirestoreConnected) {
             // Удаляем из Firestore
-            await window.db.collection('repairs').doc(repair.firestoreId).delete();
+            try {
+                await window.db.collection('repairs').doc(repair.firestoreId).delete();
+                console.log('Заявка удалена из Firestore:', repair.firestoreId);
+            } catch (firestoreError) {
+                console.error('Ошибка удаления из Firestore:', firestoreError);
+                showNotification('Удалено локально (Firestore недоступен)', 'warning');
+            }
         }
         
         // Удаляем локально
@@ -1013,6 +1098,10 @@ window.syncAllData = async function() {
     try {
         // Перезагружаем данные
         await loadRepairs();
+        
+        // Обновляем статус подключения
+        updateConnectionStatus();
+        
         showNotification('Синхронизация завершена', 'success');
         
     } catch (error) {
@@ -1095,6 +1184,7 @@ window.showDashboard = function() {
     const pending = repairsList.filter(r => isInRepairStatus(r.status)).length;
     const completed = repairsList.filter(r => r.status === 'Завершено').length;
     const total = repairsList.length;
+    const equipmentCount = equipmentList.length;
     
     content.innerHTML = `
         <div class="dashboard-stats">
@@ -1114,10 +1204,12 @@ window.showDashboard = function() {
         <div style="margin-top: 30px; padding: 20px; background: #f5f5f5; border-radius: 8px;">
             <h3>Информация о системе</h3>
             <p><strong>Заявок в ремонте:</strong> выделены желтым цветом и находятся в начале таблицы</p>
-            <p><strong>Всего оборудования:</strong> ${equipmentList.length}</p>
-            <p><strong>Статус Firebase:</strong> ${window.isFirebaseReady ? 'ONLINE' : 'OFFLINE'}</p>
+            <p><strong>Всего оборудования:</strong> ${equipmentCount}</p>
+            <p><strong>Статус Firestore:</strong> ${isFirestoreConnected ? '<span style="color: green;">🔥 ONLINE</span>' : '<span style="color: red;">📴 OFFLINE</span>'}</p>
+            <p><strong>Firebase готовность:</strong> ${window.isFirebaseReady ? '<span style="color: green;">Готов</span>' : '<span style="color: red;">Не готов</span>'}</p>
             <p><strong>Пользователь:</strong> ${window.currentUser?.name || 'Неизвестно'}</p>
             <p><strong>Роль:</strong> ${window.currentUser?.type || 'Не определена'}</p>
+            <p><strong>Локальных заявок:</strong> ${repairsList.filter(r => !r.synced).length} не синхронизировано</p>
         </div>
     `;
     
