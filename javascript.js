@@ -12,6 +12,17 @@ async function initApplication() {
     console.log('Инициализация приложения v6.1');
     
     try {
+        // Инициализируем Firebase сервисы если нужно
+        if (typeof window.initializeFirebaseServices === 'function') {
+            await window.initializeFirebaseServices();
+        } else {
+            // Fallback: проверяем глобальные переменные
+            if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+                window.db = firebase.firestore();
+                window.auth = firebase.auth();
+                window.isFirebaseReady = true;
+            }
+        }
         // Устанавливаем глобальные переменные из window если они есть
         if (typeof window.currentUser === 'undefined') {
             const userData = localStorage.getItem('repair_journal_currentUser');
