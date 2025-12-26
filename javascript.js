@@ -1,5 +1,5 @@
-// javascript.js - Основная логика приложения v6.0
-console.log('Ремонтный журнал v6.0 загружен');
+// javascript.js - Основная логика приложения v6.1
+console.log('Ремонтный журнал v6.1 загружен');
 
 // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
 let repairsList = [];
@@ -7,11 +7,39 @@ let equipmentList = [];
 let unsubscribeRepairs = null;
 let deviceId = null;
 
-// ===== ИНИЦИАЛИЗАЦИЯ =====
+// ===== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ =====
 async function initApplication() {
-    console.log('Инициализация приложения v6.0');
+    console.log('Инициализация приложения v6.1');
     
     try {
+        // Устанавливаем глобальные переменные из window если они есть
+        if (typeof window.currentUser === 'undefined') {
+            const userData = localStorage.getItem('repair_journal_currentUser');
+            window.currentUser = userData ? JSON.parse(userData) : null;
+        }
+        
+        if (typeof window.isFirebaseReady === 'undefined') {
+            window.isFirebaseReady = false;
+        }
+        
+        if (typeof window.db === 'undefined') {
+            window.db = null;
+        }
+        
+        // Генерируем deviceId если нужно
+        if (!deviceId) {
+            deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            console.log('Device ID:', deviceId);
+        }
+        
+        // Проверяем Firebase доступность
+        if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+            console.log('Firebase уже инициализирован в другом месте');
+            window.db = firebase.firestore();
+            window.auth = firebase.auth();
+            window.isFirebaseReady = true;
+        }
+        
         // Устанавливаем текущую дату и время в форму
         setDefaultFormDateTime();
         
@@ -29,9 +57,13 @@ async function initApplication() {
         
         console.log('Приложение инициализировано успешно');
         
+        // Скрываем экран загрузки
+        hideLoadingScreen();
+        
     } catch (error) {
         console.error('Ошибка инициализации:', error);
         showNotification('Ошибка запуска приложения', 'error');
+        hideLoadingScreen();
     }
 }
 
@@ -52,6 +84,19 @@ function setDefaultFormDateTime() {
     // Устанавливаем текущего пользователя как автора
     if (authorInput && window.currentUser) {
         authorInput.value = window.currentUser.name;
+    }
+}
+
+function hideLoadingScreen() {
+    const loadingScreen = document.getElementById('loadingScreen');
+    const mainContainer = document.getElementById('mainContainer');
+    
+    if (loadingScreen) {
+        loadingScreen.style.display = 'none';
+    }
+    
+    if (mainContainer) {
+        mainContainer.style.display = 'block';
     }
 }
 
@@ -325,19 +370,20 @@ function renderRepairsTable() {
     }
     
     // ВАЖНО: СОРТИРУЕМ - сначала заявки "в ремонте", потом остальные
-   const sortedRepairs = [...repairsList].sort((a, b) => {
-    const aInRepair = isInRepairStatus(a.status);
-    const bInRepair = isInRepairStatus(b.status);
-    
-    // Заявки в ремонте должны быть выше
-    if (aInRepair && !bInRepair) return -1;
-    if (!aInRepair && bInRepair) return 1;
-    
-    // Остальные сортируются по дате
-    const dateA = a.start_datetime ? new Date(a.start_datetime) : new Date(0);
-    const dateB = b.start_datetime ? new Date(b.start_datetime) : new Date(0);
-    return dateB - dateA;
-});
+    const sortedRepairs = [...repairsList].sort((a, b) => {
+        // Проверяем статусы
+        const aInRepair = isInRepairStatus(a.status);
+        const bInRepair = isInRepairStatus(b.status);
+        
+        // Если одна заявка в ремонте, а другая нет - в ремонте должна быть выше
+        if (aInRepair && !bInRepair) return -1;
+        if (!aInRepair && bInRepair) return 1;
+        
+        // Если обе в ремонте или обе не в ремонте - сортируем по дате
+        const dateA = a.start_datetime ? new Date(a.start_datetime) : new Date(0);
+        const dateB = b.start_datetime ? new Date(b.start_datetime) : new Date(0);
+        return dateB - dateA; // Новые сверху
+    });
     
     // Рендерим отсортированный список
     sortedRepairs.forEach((repair, index) => {
@@ -350,6 +396,7 @@ function renderRepairsTable() {
 
 function isInRepairStatus(status) {
     if (!status) return false;
+    
     const statusLower = status.toLowerCase();
     return statusLower.includes('ремонт') || 
            statusLower.includes('в работе') || 
@@ -362,13 +409,14 @@ function createRepairRow(repair, index) {
     
     // ВАЖНО: Определяем, находится ли заявка в ремонте
     const isInRepair = isInRepairStatus(repair.status);
+    
+    // ВАЖНО: Если заявка в ремонте - добавляем специальный класс
     if (isInRepair) {
         row.className = 'repair-in-progress';
         row.style.backgroundColor = '#fff3cd';
         row.style.borderLeft = '4px solid #ffc107';
         row.style.fontWeight = '600';
-}
-
+    }
     
     // Форматируем даты
     const startDate = repair.start_datetime ? new Date(repair.start_datetime) : null;
@@ -502,6 +550,9 @@ function setupUI() {
     // Настраиваем информацию о пользователе
     updateUserInfo();
     
+    // Настраиваем обработчики кнопок
+    setupButtonHandlers();
+    
     console.log('UI настроен');
 }
 
@@ -527,6 +578,32 @@ function updateUserInfo() {
     if (userInfoElement) {
         userInfoElement.style.display = 'flex';
     }
+}
+
+function setupButtonHandlers() {
+    // Кнопка выхода
+    const logoutBtn = document.querySelector('.logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('repair_journal_currentUser');
+            localStorage.removeItem('repair_journal_isAuthenticated');
+            window.location.href = 'login.html';
+        });
+    }
+    
+    // Кнопка закрытия дашборда
+    const closeModalBtn = document.querySelector('.modal .close');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeDashboard);
+    }
+    
+    // Закрытие модального окна при клике вне его
+    window.addEventListener('click', (event) => {
+        const modal = document.getElementById('dashboardModal');
+        if (modal && event.target === modal) {
+            closeDashboard();
+        }
+    });
 }
 
 async function handleFormSubmit(event) {
@@ -1033,15 +1110,23 @@ window.logout = function() {
     window.location.href = 'login.html';
 };
 
-// Запускаем приложение когда всё готово
-window.addEventListener('load', function() {
-    console.log('Страница загружена, запускаем приложение...');
+// ===== ЗАПУСК ПРИЛОЖЕНИЯ =====
+// Запускаем приложение когда страница загружена
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startApplication);
+} else {
+    startApplication();
+}
+
+function startApplication() {
+    console.log('Запуск приложения...');
     
     // Проверяем авторизацию
     const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
     const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
     
     if (!isAuthenticated || !currentUser) {
+        console.log('Пользователь не авторизован, перенаправляем...');
         window.location.href = 'login.html';
         return;
     }
@@ -1051,4 +1136,4 @@ window.addEventListener('load', function() {
     
     // Запускаем инициализацию
     setTimeout(initApplication, 100);
-});
+}
