@@ -768,54 +768,32 @@
     <!-- Конфигурация Firebase -->
     <script src="firebase-config.js"></script>
     
-    <!-- Основная логика приложения -->
+    <!-- Менеджер инициализации приложения -->
+    <script src="app.js"></script>
+    
+    <!-- Основная логика приложения (без инициализации) -->
     <script src="javascript.js"></script>
     
     <!-- Инициализация приложения -->
     <script>
-        // Проверка авторизации и отображение контента
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM загружен, проверяем авторизацию...');
-            
-            const isAuthenticated = localStorage.getItem('repair_journal_isAuthenticated');
-            const currentUser = JSON.parse(localStorage.getItem('repair_journal_currentUser'));
-            
-            if (!isAuthenticated || !currentUser) {
-                console.log('Пользователь не авторизован, перенаправляем на login.html');
-                window.location.href = 'login.html';
-                return;
-            }
-            
-            console.log('Пользователь авторизован:', currentUser.name);
-            
-            // Показываем основной контент
-            const loadingScreen = document.getElementById('loadingScreen');
-            const mainContainer = document.getElementById('mainContainer');
-            
-            if (loadingScreen) {
-                loadingScreen.style.display = 'none';
-            }
-            if (mainContainer) {
-                mainContainer.style.display = 'block';
-            }
-        });
-
         // Регистрация Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
                 navigator.serviceWorker.register('service-worker.js')
                     .then(function(registration) {
                         console.log('Service Worker зарегистрирован:', registration.scope);
-                        // Периодически обновляем сервис-воркер
-                        setInterval(() => {
-                            registration.update();
-                        }, 60 * 60 * 1000); // Каждый час
                     })
                     .catch(function(error) {
                         console.log('Ошибка регистрации Service Worker:', error);
                     });
             });
         }
+        
+        // Функция для принудительного обновления
+        window.forceUpdate = function() {
+            localStorage.clear();
+            window.location.reload();
+        };
     </script>
 </body>
 </html>
