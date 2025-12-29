@@ -1,5 +1,5 @@
-// javascript.js - Основная логика приложения v6.2 (Исправленный)
-console.log('Ремонтный журнал v6.2 загружен');
+// javascript.js - Основная логика приложения v6.3 (Исправленная инициализация)
+console.log('Ремонтный журнал v6.3 загружен');
 
 // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
 let repairsList = [];
@@ -10,69 +10,34 @@ let isFirestoreConnected = false;
 
 // ===== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ =====
 async function initApplication() {
-    console.log('Инициализация приложения v6.2');
+    console.log('Инициализация приложения v6.3');
     
     try {
-        // Сначала загружаем базу оборудования локально
-        await loadEquipmentDatabase();
+        // 1. Сначала инициализируем Firebase (самое первое действие!)
+        updateLoadingStatus('Инициализация Firebase...');
+        await initializeFirebaseWithRetry();
         
-        // Затем инициализируем Firebase
-        if (typeof window.initializeFirebase === 'function') {
-            console.log('Запуск инициализации Firebase...');
-            updateLoadingStatus('Подключение к Firebase...');
-            
-            const firebaseResult = await window.initializeFirebase();
-            
-            if (firebaseResult.success) {
-                console.log('Firebase инициализирован успешно');
-                isFirestoreConnected = true;
-                showNotification('Firebase подключен', 'success');
-                
-                // Тестируем соединение
-                try {
-                    const testResult = await window.testFirestoreConnection();
-                    if (testResult.success) {
-                        console.log('Соединение с Firestore подтверждено');
-                        updateLoadingStatus('Синхронизация данных...');
-                    }
-                } catch (testError) {
-                    console.warn('Тест соединения не удался:', testError);
-                }
-            } else {
-                console.warn('Firebase инициализирован с ошибкой:', firebaseResult.error);
-                isFirestoreConnected = false;
-                showNotification('Офлайн режим: ' + firebaseResult.error, 'warning');
-            }
-        } else {
-            console.warn('Функция инициализации Firebase не найдена');
-            window.isFirebaseReady = false;
-            isFirestoreConnected = false;
-            showNotification('Работаем в офлайн-режиме', 'warning');
-        }
-        
-        // Проверяем статус Firebase
-        if (window.checkFirebaseStatus) {
-            const status = window.checkFirebaseStatus();
-            console.log('Статус Firebase после инициализации:', status);
-        }
-        
-        // Устанавливаем текущую дату и время в форму
+        // 2. Устанавливаем текущую дату и время в форму
         setDefaultFormDateTime();
         
-        // Загружаем заявки (из Firestore или локально)
+        // 3. Загружаем базу оборудования (из CSV, без Firestore)
+        updateLoadingStatus('Загрузка базы оборудования...');
+        await loadEquipmentDatabase();
+        
+        // 4. Загружаем заявки
         updateLoadingStatus('Загрузка заявок...');
         await loadRepairs();
         
-        // Настраиваем UI
+        // 5. Настраиваем UI
         setupUI();
         
-        // Обновляем статистику
+        // 6. Обновляем статистику
         updateStatistics();
         
         console.log('Приложение инициализировано успешно');
         console.log('Статус подключения:', isFirestoreConnected ? 'ONLINE' : 'OFFLINE');
         
-        // Скрываем экран загрузки
+        // 7. Скрываем экран загрузки
         hideLoadingScreen();
         
     } catch (error) {
@@ -80,6 +45,65 @@ async function initApplication() {
         showNotification('Ошибка запуска приложения: ' + error.message, 'error');
         hideLoadingScreen();
     }
+}
+
+// Инициализация Firebase с повторными попытками
+async function initializeFirebaseWithRetry() {
+    const maxRetries = 3;
+    let lastError = null;
+    
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            if (typeof window.initializeFirebase === 'function') {
+                console.log(`Попытка инициализации Firebase #${i + 1}...`);
+                
+                const firebaseResult = await window.initializeFirebase();
+                
+                if (firebaseResult.success) {
+                    console.log('Firebase инициализирован успешно');
+                    isFirestoreConnected = true;
+                    
+                    // Проверяем соединение с Firestore
+                    try {
+                        const testResult = await window.testFirestoreConnection();
+                        if (testResult.success) {
+                            console.log('Соединение с Firestore подтверждено');
+                            return;
+                        } else {
+                            console.warn('Тест соединения не удался:', testResult.error);
+                        }
+                    } catch (testError) {
+                        console.warn('Ошибка теста соединения:', testError);
+                    }
+                    
+                    return; // Успешная инициализация, выходим
+                } else {
+                    lastError = firebaseResult.error;
+                    console.warn(`Попытка ${i + 1} не удалась:`, lastError);
+                    
+                    if (i < maxRetries - 1) {
+                        // Ждем перед следующей попыткой
+                        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                    }
+                }
+            } else {
+                throw new Error('Функция инициализации Firebase не найдена');
+            }
+        } catch (error) {
+            lastError = error;
+            console.warn(`Попытка ${i + 1} вызвала исключение:`, error);
+            
+            if (i < maxRetries - 1) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+            }
+        }
+    }
+    
+    // Если все попытки не удались, работаем в офлайн-режиме
+    console.warn('Не удалось инициализировать Firebase, работаем в офлайн-режиме');
+    window.isFirebaseReady = false;
+    isFirestoreConnected = false;
+    showNotification('Работаем в офлайн-режиме', 'warning');
 }
 
 function updateLoadingStatus(message) {
@@ -125,36 +149,21 @@ function hideLoadingScreen() {
 // ===== БАЗА ОБОРУДОВАНИЯ =====
 async function loadEquipmentDatabase() {
     console.log('Загрузка базы оборудования...');
-    updateLoadingStatus('Загрузка базы оборудования...');
     
     try {
-        // Пробуем загрузить из Firestore
-        if (window.isFirebaseReady && window.db && isFirestoreConnected) {
-            try {
-                console.log('Попытка загрузки оборудования из Firestore...');
-                const snapshot = await window.db.collection('equipment').limit(100).get();
-                if (!snapshot.empty) {
-                    equipmentList = [];
-                    snapshot.forEach(doc => {
-                        equipmentList.push({ id: doc.id, ...doc.data() });
-                    });
-                    console.log('Загружено из Firestore:', equipmentList.length);
-                    populateEquipmentSelect();
-                    return;
-                } else {
-                    console.log('Коллекция equipment в Firestore пуста');
-                }
-            } catch (firestoreError) {
-                console.warn('Не удалось загрузить из Firestore:', firestoreError);
-                // Продолжаем загрузку из CSV
-            }
-        }
-        
-        // Загружаем из CSV
-        console.log('Загрузка оборудования из CSV...');
+        // ВСЕГДА загружаем из CSV (основной источник)
         const equipmentData = await loadEquipmentFromCSV();
         equipmentList = equipmentData;
         console.log('Загружено из CSV:', equipmentList.length);
+        
+        // Попробуем обновить из Firestore если подключены
+        if (window.isFirebaseReady && window.db && isFirestoreConnected) {
+            try {
+                await syncEquipmentWithFirestore();
+            } catch (syncError) {
+                console.warn('Не удалось синхронизировать оборудование с Firestore:', syncError);
+            }
+        }
         
         populateEquipmentSelect();
         
@@ -162,6 +171,29 @@ async function loadEquipmentDatabase() {
         console.error('Ошибка загрузки оборудования:', error);
         equipmentList = [];
         showNotification('Ошибка загрузки базы оборудования', 'error');
+    }
+}
+
+async function syncEquipmentWithFirestore() {
+    if (!window.db) return;
+    
+    try {
+        console.log('Синхронизация оборудования с Firestore...');
+        const snapshot = await window.db.collection('equipment').limit(10).get();
+        
+        if (!snapshot.empty) {
+            const firestoreEquipment = [];
+            snapshot.forEach(doc => {
+                firestoreEquipment.push({ id: doc.id, ...doc.data() });
+            });
+            
+            console.log('Получено оборудования из Firestore:', firestoreEquipment.length);
+            
+            // Можно объединить данные, но пока просто логируем
+            // В будущем можно реализовать приоритет Firestore
+        }
+    } catch (error) {
+        throw error;
     }
 }
 
@@ -274,29 +306,6 @@ function setupEquipmentSearch() {
 }
 
 // ===== ЗАГРУЗКА И ОТОБРАЖЕНИЕ ЗАЯВОК =====
-// Функция для переподключения Firebase
-window.reconnectFirebase = async function() {
-    showNotification('Переподключение к Firebase...', 'info');
-    
-    if (typeof window.reinitializeFirebase === 'function') {
-        const result = await window.reinitializeFirebase();
-        
-        if (result.success) {
-            showNotification('Firebase переподключен успешно', 'success');
-            isFirestoreConnected = true;
-            
-            // Перезагружаем данные
-            await loadEquipmentDatabase();
-            await loadRepairs();
-        } else {
-            showNotification('Ошибка переподключения: ' + (result.error || 'Неизвестная ошибка'), 'error');
-            isFirestoreConnected = false;
-        }
-    } else {
-        showNotification('Функция переподключения не найдена', 'error');
-    }
-};
-
 async function loadRepairs() {
     console.log('Загрузка заявок...');
     
@@ -1227,6 +1236,28 @@ window.logout = function() {
     localStorage.removeItem('repair_journal_currentUser');
     localStorage.removeItem('repair_journal_isAuthenticated');
     window.location.href = 'login.html';
+};
+
+// Функция для переподключения Firebase
+window.reinitializeFirebase = async function() {
+    showNotification('Переподключение к Firebase...', 'info');
+    
+    if (typeof window.reinitializeFirebase === 'function') {
+        const result = await window.reinitializeFirebase();
+        
+        if (result.success) {
+            showNotification('Firebase переподключен успешно', 'success');
+            isFirestoreConnected = true;
+            
+            // Перезагружаем данные
+            await loadRepairs();
+        } else {
+            showNotification('Ошибка переподключения: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            isFirestoreConnected = false;
+        }
+    } else {
+        showNotification('Функция переподключения не найдена', 'error');
+    }
 };
 
 // ===== ЗАПУСК ПРИЛОЖЕНИЯ =====
