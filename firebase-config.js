@@ -1,7 +1,7 @@
-// firebase-config.js - Конфигурация Firebase v3.1.0 (ИСПРАВЛЕННЫЙ)
-// Устранена ошибка с persistence и улучшена обработка подключения
+// firebase-config.js - Конфигурация Firebase v3.2.0 (ПОЛНОСТЬЮ ИСПРАВЛЕННЫЙ)
+// Устранена ошибка с настройками Firestore после инициализации
 
-console.log('Firebase config v3.1.0 загружен');
+console.log('Firebase config v3.2.0 загружен');
 
 // Конфигурация Firebase проекта
 const firebaseConfig = {
@@ -17,12 +17,13 @@ const firebaseConfig = {
 // Экспортируем конфигурацию
 window.firebaseConfig = firebaseConfig;
 
-// Переменная для отслеживания состояния persistence
+// Флаги состояния
 let persistenceEnabled = false;
+let settingsApplied = false;
 
-// Основная функция инициализации Firebase
+// Основная функция инициализации Firebase (ИСПРАВЛЕННАЯ)
 window.initializeFirebase = async function() {
-    console.log('Инициализация Firebase v3.1.0...');
+    console.log('Инициализация Firebase v3.2.0...');
     
     // Проверяем, загружена ли библиотека Firebase
     if (typeof firebase === 'undefined') {
@@ -47,14 +48,32 @@ window.initializeFirebase = async function() {
         
         console.log('Firebase сервисы получены');
         
-        // ВАЖНО: Настраиваем persistence ПЕРЕД любой другой операцией
+        // ВАЖНО: НАСТРАИВАЕМ НАСТРОЙКИ Firestore ДО ВСЕХ ДРУГИХ ОПЕРАЦИЙ
+        if (!settingsApplied) {
+            try {
+                console.log('Применение настроек Firestore...');
+                // Настройка таймаутов для Firestore (только один раз!)
+                const firestoreSettings = {
+                    cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED
+                };
+                
+                db.settings(firestoreSettings);
+                settingsApplied = true;
+                console.log('Настройки Firestore успешно применены');
+            } catch (settingsError) {
+                console.warn('Ошибка применения настроек Firestore:', settingsError.message);
+                // Продолжаем работу даже если настройки не применились
+            }
+        }
+        
+        // ВАЖНО: Настраиваем persistence
         if (!persistenceEnabled) {
             try {
                 console.log('Попытка включения persistence...');
                 
-                // Отключаем многоваблочную persistence для избежания конфликтов
+                // Используем более безопасный подход
                 await db.enablePersistence({
-                    synchronizeTabs: false  // ВАЖНО: отключаем синхронизацию между вкладками
+                    synchronizeTabs: false  // Отключаем синхронизацию между вкладками
                 });
                 
                 persistenceEnabled = true;
@@ -63,15 +82,12 @@ window.initializeFirebase = async function() {
             } catch (persistenceError) {
                 console.log('Обработка ошибки persistence:', persistenceError.code);
                 
-                // ВАЖНО: Игнорируем конкретные ошибки и продолжаем работу
+                // Игнорируем конкретные ошибки и продолжаем работу
                 if (persistenceError.code === 'failed-precondition') {
-                    // Многоваблочный режим - не критично
                     console.log('Persistence уже включена в другой вкладке. Продолжаем...');
                 } else if (persistenceError.code === 'unimplemented') {
-                    // Браузер не поддерживает - не критично
                     console.log('Браузер не поддерживает persistence. Продолжаем...');
                 } else {
-                    // Любая другая ошибка
                     console.warn('Другая ошибка persistence:', persistenceError.message);
                 }
                 
@@ -101,30 +117,25 @@ window.initializeFirebase = async function() {
             // Продолжаем без аутентификации
         }
         
-        // Настройка таймаутов для Firestore
-        const firestoreSettings = {
-            cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED
-        };
-        
-        // Применяем настройки если они еще не применены
-        if (!db._settingsApplied) {
-            db.settings(firestoreSettings);
-        }
-        
-        // Тестируем соединение с Firestore
+        // Тестируем соединение с Firestore (упрощенная версия)
         let connectionTest = false;
         try {
             console.log('Тестирование соединения с Firestore...');
             
-            // Быстрый тест - попытка получить коллекцию repairs
+            // Более безопасный тест - просто проверяем доступ
             const testQuery = db.collection('repairs').limit(1);
-            await testQuery.get();
+            // Используем таймаут для теста
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Таймаут соединения')), 5000)
+            );
+            
+            await Promise.race([testQuery.get(), timeoutPromise]);
             
             connectionTest = true;
             console.log('Соединение с Firestore успешно!');
             
         } catch (connectionError) {
-            console.error('Ошибка соединения с Firestore:', connectionError);
+            console.warn('Ошибка соединения с Firestore:', connectionError.message);
             
             // Анализируем ошибку
             if (connectionError.code === 'permission-denied') {
@@ -140,14 +151,15 @@ window.initializeFirebase = async function() {
         window.firebaseApp = app;
         window.db = db;
         window.auth = auth;
-        window.isFirebaseReady = connectionTest; // Только если соединение успешно
+        window.isFirebaseReady = connectionTest;
         window.firebaseUser = user;
         
         console.log('Инициализация Firebase завершена:', {
             projectId: app.options.projectId,
             userId: user?.uid || 'anonymous',
             firestoreConnected: connectionTest,
-            persistenceEnabled: persistenceEnabled
+            persistenceEnabled: persistenceEnabled,
+            settingsApplied: settingsApplied
         });
         
         return { 
@@ -186,7 +198,8 @@ window.checkFirebaseStatus = function() {
         authReady: window.auth !== null && window.auth !== undefined,
         userAuthenticated: window.firebaseUser !== null,
         isFirebaseReady: window.isFirebaseReady === true,
-        persistenceEnabled: persistenceEnabled
+        persistenceEnabled: persistenceEnabled,
+        settingsApplied: settingsApplied
     };
     
     console.log('Статус Firebase:', status);
@@ -197,8 +210,9 @@ window.checkFirebaseStatus = function() {
 window.reinitializeFirebase = async function() {
     console.log('Принудительная переинициализация Firebase...');
     
-    // Сбрасываем состояние persistence
+    // Сбрасываем флаги
     persistenceEnabled = false;
+    settingsApplied = false;
     
     // Очищаем предыдущие состояния
     window.isFirebaseReady = false;
@@ -207,11 +221,25 @@ window.reinitializeFirebase = async function() {
     window.firebaseApp = null;
     window.firebaseUser = null;
     
+    try {
+        // Пробуем закрыть предыдущее приложение
+        if (firebase.apps.length > 0) {
+            try {
+                await firebase.app().delete();
+                console.log('Предыдущее Firebase приложение удалено');
+            } catch (deleteError) {
+                console.warn('Не удалось удалить предыдущее приложение:', deleteError);
+            }
+        }
+    } catch (e) {
+        console.warn('Ошибка при подготовке к переинициализации:', e);
+    }
+    
     // Пробуем инициализировать заново
     return await window.initializeFirebase();
 };
 
-// Тестовая функция для проверки соединения с Firestore
+// Тестовая функция для проверки соединения с Firestore (безопасная версия)
 window.testFirestoreConnection = async function() {
     if (!window.db) {
         console.log('Firestore не инициализирован');
@@ -219,11 +247,15 @@ window.testFirestoreConnection = async function() {
     }
     
     try {
-        console.log('Тестирование соединения с Firestore...');
+        console.log('Безопасное тестирование соединения с Firestore...');
         
-        // Простой тест - проверяем доступ к коллекции repairs
+        // Простой тест - проверяем доступ к коллекции repairs с таймаутом
         const testRef = window.db.collection('repairs');
-        const querySnapshot = await testRef.limit(1).get();
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Таймаут теста соединения')), 7000)
+        );
+        
+        const querySnapshot = await Promise.race([testRef.limit(1).get(), timeoutPromise]);
         
         console.log('Соединение с Firestore работает. Документов:', querySnapshot.size);
         
@@ -266,6 +298,7 @@ window.clearFirebaseCache = async function() {
         
         // Сбрасываем флаги
         persistenceEnabled = false;
+        settingsApplied = false;
         window.isFirebaseReady = false;
         
         console.log('Кеш Firebase очищен');
@@ -277,4 +310,4 @@ window.clearFirebaseCache = async function() {
     }
 };
 
-console.log('Firebase config v3.1.0 загружен и готов к использованию');
+console.log('Firebase config v3.2.0 загружен и готов к использованию');
