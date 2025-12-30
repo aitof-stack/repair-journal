@@ -1,5 +1,5 @@
-// javascript.js - Основная логика приложения v6.3 (Исправленная инициализация)
-console.log('Ремонтный журнал v6.3 загружен');
+// javascript.js - Основная логика приложения v6.4 (Исправленная инициализация)
+console.log('Ремонтный журнал v6.4 загружен');
 
 // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
 let repairsList = [];
@@ -10,12 +10,12 @@ let isFirestoreConnected = false;
 
 // ===== ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ =====
 async function initApplication() {
-    console.log('Инициализация приложения v6.3');
+    console.log('Инициализация приложения v6.4');
     
     try {
         // 1. Сначала инициализируем Firebase (самое первое действие!)
         updateLoadingStatus('Инициализация Firebase...');
-        await initializeFirebaseWithRetry();
+        const firebaseResult = await initializeFirebase();
         
         // 2. Устанавливаем текущую дату и время в форму
         setDefaultFormDateTime();
@@ -25,7 +25,7 @@ async function initApplication() {
         await loadEquipmentDatabase();
         
         // 4. Загружаем заявки
-        updateLoadingStatus('Загрузка заявки...');
+        updateLoadingStatus('Загрузка заявок...');
         await loadRepairs();
         
         // 5. Настраиваем UI
@@ -47,63 +47,40 @@ async function initApplication() {
     }
 }
 
-// Инициализация Firebase с повторными попытками
-async function initializeFirebaseWithRetry() {
-    const maxRetries = 3;
-    let lastError = null;
-    
-    for (let i = 0; i < maxRetries; i++) {
-        try {
-            if (typeof window.initializeFirebase === 'function') {
-                console.log(`Попытка инициализации Firebase #${i + 1}...`);
-                
-                const firebaseResult = await window.initializeFirebase();
-                
-                if (firebaseResult.success) {
-                    console.log('Firebase инициализирован успешно');
-                    isFirestoreConnected = true;
-                    
-                    // Проверяем соединение с Firestore
-                    try {
-                        const testResult = await window.testFirestoreConnection();
-                        if (testResult.success) {
-                            console.log('Соединение с Firestore подтверждено');
-                            return;
-                        } else {
-                            console.warn('Тест соединения не удался:', testResult.error);
-                        }
-                    } catch (testError) {
-                        console.warn('Ошибка теста соединения:', testError);
-                    }
-                    
-                    return; // Успешная инициализация, выходим
-                } else {
-                    lastError = firebaseResult.error;
-                    console.warn(`Попытка ${i + 1} не удалась:`, lastError);
-                    
-                    if (i < maxRetries - 1) {
-                        // Ждем перед следующей попыткой
-                        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-                    }
-                }
-            } else {
-                throw new Error('Функция инициализации Firebase не найдена');
-            }
-        } catch (error) {
-            lastError = error;
-            console.warn(`Попытка ${i + 1} вызвала исключение:`, error);
+// Упрощенная инициализация Firebase (без повторных попыток, которые вызывали ошибку)
+async function initializeFirebase() {
+    try {
+        if (typeof window.initializeFirebase === 'function') {
+            console.log('Инициализация Firebase...');
             
-            if (i < maxRetries - 1) {
-                await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+            const firebaseResult = await window.initializeFirebase();
+            
+            if (firebaseResult.success) {
+                console.log('Firebase инициализирован успешно');
+                isFirestoreConnected = firebaseResult.connected;
+                
+                // Если не удалось подключиться, показываем предупреждение
+                if (!isFirestoreConnected) {
+                    console.warn('Firestore не подключен, работаем в офлайн-режиме');
+                    showNotification('Работаем в офлайн-режиме', 'warning');
+                }
+                
+                return firebaseResult;
+            } else {
+                console.warn('Инициализация Firebase не удалась:', firebaseResult.error);
+                isFirestoreConnected = false;
+                showNotification('Firebase недоступен, работаем в офлайн-режиме', 'warning');
+                return { success: false, connected: false };
             }
+        } else {
+            throw new Error('Функция инициализации Firebase не найдена');
         }
+    } catch (error) {
+        console.error('Ошибка инициализации Firebase:', error);
+        isFirestoreConnected = false;
+        showNotification('Ошибка подключения к Firebase', 'warning');
+        return { success: false, connected: false };
     }
-    
-    // Если все попытки не удались, работаем в офлайн-режиме
-    console.warn('Не удалось инициализировать Firebase, работаем в офлайн-режиме');
-    window.isFirebaseReady = false;
-    isFirestoreConnected = false;
-    showNotification('Работаем в офлайн-режиме', 'warning');
 }
 
 function updateLoadingStatus(message) {
@@ -1238,25 +1215,28 @@ window.logout = function() {
     window.location.href = 'login.html';
 };
 
-// Функция для переподключения Firebase
+// Функция для переподключения Firebase (исправленная)
 window.reinitializeFirebase = async function() {
     showNotification('Переподключение к Firebase...', 'info');
     
-    if (typeof window.reinitializeFirebase === 'function') {
+    try {
+        // Используем функцию из firebase-config.js
         const result = await window.reinitializeFirebase();
         
         if (result.success) {
             showNotification('Firebase переподключен успешно', 'success');
-            isFirestoreConnected = true;
+            isFirestoreConnected = result.connected;
             
             // Перезагружаем данные
             await loadRepairs();
+            updateConnectionStatus();
         } else {
             showNotification('Ошибка переподключения: ' + (result.error || 'Неизвестная ошибка'), 'error');
             isFirestoreConnected = false;
         }
-    } else {
-        showNotification('Функция переподключения не найдена', 'error');
+    } catch (error) {
+        showNotification('Ошибка переподключения: ' + error.message, 'error');
+        isFirestoreConnected = false;
     }
 };
 
