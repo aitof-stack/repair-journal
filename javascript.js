@@ -25,7 +25,7 @@ async function initApplication() {
         await loadEquipmentDatabase();
         
         // 4. Загружаем заявки
-        updateLoadingStatus('Загрузка заявок...');
+        updateLoadingStatus('Загрузка заявки...');
         await loadRepairs();
         
         // 5. Настраиваем UI
@@ -568,7 +568,7 @@ function getStatusClass(status) {
     if (!status) return 'status-unknown';
     
     const statusLower = status.toLowerCase();
-    if (isInRepairStatus(statusLower)) return 'status-pending';
+    if (isInRepairStatus(statusLower)) return 'status-in-repair';
     if (statusLower.includes('заверш') || statusLower.includes('готов')) return 'status-completed';
     if (statusLower.includes('нов')) return 'status-new';
     
