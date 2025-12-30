@@ -1,7 +1,7 @@
-// firebase-config.js - Конфигурация Firebase v3.0.0 (ИСПРАВЛЕННЫЙ)
+// firebase-config.js - Конфигурация Firebase v3.1.0 (ИСПРАВЛЕННЫЙ)
 // Устранена ошибка с persistence и улучшена обработка подключения
 
-console.log('Firebase config v3.0.0 загружен');
+console.log('Firebase config v3.1.0 загружен');
 
 // Конфигурация Firebase проекта
 const firebaseConfig = {
@@ -22,7 +22,7 @@ let persistenceEnabled = false;
 
 // Основная функция инициализации Firebase
 window.initializeFirebase = async function() {
-    console.log('Инициализация Firebase v3.0.0...');
+    console.log('Инициализация Firebase v3.1.0...');
     
     // Проверяем, загружена ли библиотека Firebase
     if (typeof firebase === 'undefined') {
@@ -277,4 +277,4 @@ window.clearFirebaseCache = async function() {
     }
 };
 
-console.log('Firebase config v3.0.0 загружен и готов к использованию');
+console.log('Firebase config v3.1.0 загружен и готов к использованию');
