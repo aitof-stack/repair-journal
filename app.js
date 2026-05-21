@@ -646,23 +646,7 @@ async function updateEquipmentDB() { await loadEquipmentDatabase(); showNotifica
 function updateDashboardStats() {
     const container = document.getElementById('dashboardStats');
     if (!container) return;
-    const total = repairRequests.length;
-    const open = repairRequests.filter(r => r.status === 'open' || !r.status).length;
-    const repair = repairRequests.filter(r => r.status === 'repair').length;
-    const waiting = repairRequests.filter(r => r.status === 'waiting').length;
-    const completed = repairRequests.filter(r => r.status === 'completed').length;
-    const hours = repairRequests.reduce((s, r) => s + (r.downtimeHours || 0), 0);
-
-    container.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div class="summary-item"><h3>Всего</h3><div class="stat-value">${total}</div></div>
-            <div class="summary-item"><h3>Открыто</h3><div class="stat-value">${open}</div></div>
-            <div class="summary-item"><h3>В ремонте</h3><div class="stat-value">${repair}</div></div>
-            <div class="summary-item"><h3>Ожидание</h3><div class="stat-value">${waiting}</div></div>
-            <div class="summary-item"><h3>Выполнено</h3><div class="stat-value">${completed}</div></div>
-            <div class="summary-item"><h3>Часы простоя</h3><div class="stat-value">${hours} ч</div></div>
-        </div>
-    `;
+    container.innerHTML = '';
 }
 
 function openDashboard() { switchTab('tabStats'); }
