@@ -14,14 +14,19 @@ const STATUS_LABELS = { open: 'Открыта', repair: 'В ремонте', wai
 const STATUS_ICONS = { open: '🟦', repair: '🟧', waiting: '🔴', completed: '🟩' };
 
 async function apiFetch(path, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
     try {
         const res = await fetch(`${API_BASE}${path}`, {
             headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
             ...options
         });
+        clearTimeout(timer);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await res.json();
     } catch (e) {
+        clearTimeout(timer);
         serverAvailable = false;
         throw e;
     }
@@ -44,7 +49,7 @@ async function initApp() {
     setupTabs();
     setupForm();
     setupSearchableSelect();
-    await Promise.all([loadEquipmentDatabase(), loadRequests()]);
+    await Promise.all([loadEquipmentDatabase(), loadRequests()]).catch(() => {});
 
     document.getElementById('loadingScreen').style.display = 'none';
 }
@@ -225,18 +230,27 @@ function onScanSuccess(code) {
 async function supabaseFetch(path, options = {}) {
     if (!USE_SUPABASE) throw new Error('Supabase not configured');
     const url = SUPABASE_URL_RAW + '/rest/v1/' + SUPABASE_TABLE + path;
-    const res = await fetch(url, {
-        headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal',
-            ...options.headers
-        },
-        ...options
-    });
-    if (!res.ok) throw new Error('Supabase ' + res.status);
-    return res;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+        const res = await fetch(url, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal',
+                ...options.headers
+            },
+            signal: controller.signal,
+            ...options
+        });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error('Supabase ' + res.status);
+        return res;
+    } catch (e) {
+        clearTimeout(timer);
+        throw e;
+    }
 }
 
 async function syncToSupabase() {
@@ -336,35 +350,33 @@ function rowToRequest(r) {
 
 // ========== REQUESTS ==========
 async function loadRequests() {
-    let serverLoaded = false;
     try {
         const data = await apiFetch('/requests');
         repairRequests = data;
         serverAvailable = true;
-        serverLoaded = true;
     } catch {
         try { repairRequests = JSON.parse(localStorage.getItem('repair_requests')) || []; } catch { repairRequests = []; }
     }
-    if (USE_SUPABASE) {
-        const supabaseData = await loadFromSupabase();
-        if (supabaseData && supabaseData.length >= repairRequests.length) {
-            repairRequests = supabaseData;
-        } else if (supabaseData && supabaseData.length > 0 && supabaseData.length < repairRequests.length) {
-            const remoteIds = new Set(supabaseData.map(r => r.id));
-            const missing = repairRequests.filter(r => !remoteIds.has(r.id));
-            if (serverLoaded && missing.length > 0) {
-                // push local missing ones to Supabase silently
-                missing.forEach(r => {
-                    supabaseFetch('', {
-                        method: 'POST',
-                        body: JSON.stringify(requestToRow(r))
-                    }).catch(() => {});
-                });
-            }
-        }
-    }
     renderRequests();
     updateSummary();
+    if (USE_SUPABASE) {
+        loadFromSupabase().then(supabaseData => {
+            if (!supabaseData) return;
+            if (supabaseData.length > 0) {
+                const localIds = new Set(repairRequests.map(r => r.id));
+                const merged = [...repairRequests];
+                supabaseData.forEach(r => {
+                    if (!localIds.has(r.id)) merged.push(r);
+                });
+                if (merged.length > repairRequests.length) {
+                    repairRequests = merged;
+                    localStorage.setItem('repair_requests', JSON.stringify(repairRequests));
+                    renderRequests();
+                    updateSummary();
+                }
+            }
+        }).catch(() => {});
+    }
 }
 
 async function saveToLS() {
@@ -544,12 +556,14 @@ async function loadEquipmentDatabase() {
         }
     } catch { /* пробуем CSV */ }
     try {
-        const response = await fetch('equipment_database.csv');
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 5000);
+        const response = await fetch('equipment_database.csv', { signal: controller.signal });
         const text = await response.text();
         parseEquipmentCSV(text);
         populateInvNumberSelect();
     } catch (error) {
-        console.error('Ошибка загрузки базы:', error);
+        console.warn('CSV не загрузился, использую умолчания:', error);
         equipmentDatabase = [
             { location: "701", invNumber: "11323", name: "Автомат холод штамповки", model: "-", machineNumber: "СК-11323" },
             { location: "735", invNumber: "28542", name: "Токарный автомобиль", model: "КЕ36750", machineNumber: "ТС-28542" },
