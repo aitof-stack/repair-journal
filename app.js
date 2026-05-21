@@ -488,7 +488,7 @@ function openDetail(id) {
         <div class="detail-row"><span class="label">Неисправность</span><span class="value">${req.faultDescription || ''}</span></div>
         <div class="detail-row"><span class="label">Номенклатура</span><span class="value">${req.productionItem || '—'}</span></div>
         ${req.status === 'completed' && req.repairEndDate ? `<div class="detail-row"><span class="label">Завершено</span><span class="value">${req.repairEndDate} ${req.repairEndTime || ''}</span></div>` : ''}
-        ${getDowntimeHours(req) > 0 ? `<div class="detail-row"><span class="label">Время простоя</span><span class="value">${getDowntimeHours(req)} ч</span></div>` : ''}
+        <div class="detail-row"><span class="label">Время простоя</span><span class="value">${getDowntimeHours(req).toFixed(1)} ч</span></div>
     `;
 
     // Status action buttons
@@ -708,7 +708,7 @@ function importRepairData(event) {
 
 function getDowntimeHours(r) {
     if (r.status === 'completed') return r.downtimeHours || 0;
-    if (r.createdAt) return Math.round((Date.now() - new Date(r.createdAt).getTime()) / (1000 * 60 * 60));
+    if (r.createdAt) return Math.max(0, (Date.now() - new Date(r.createdAt).getTime()) / (1000 * 60 * 60));
     return 0;
 }
 
@@ -771,7 +771,7 @@ function printStatistics() {
                     <td>${statusLabel}</td>
                     <td style="white-space:nowrap">${updateTime}</td>
                     <td style="white-space:nowrap">${endTime}</td>
-                    <td>${getDowntimeHours(r)}</td>
+                    <td>${getDowntimeHours(r).toFixed(1)}</td>
                     <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${(r.faultDescription || '').substring(0, 80)}</td>
                 </tr>`;
             }).join('');
