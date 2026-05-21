@@ -10,8 +10,8 @@ const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || '';
 const SUPABASE_TABLE = 'requests';
 const USE_SUPABASE = !!(SUPABASE_URL_RAW && SUPABASE_ANON_KEY && SUPABASE_URL_RAW.includes('supabase.co'));
 
-const STATUS_LABELS = { open: 'Открыта', repair: 'В ремонте', waiting: 'Ожидание запчастей', completed: 'Выполнена' };
-const STATUS_ICONS = { open: '🟦', repair: '🟧', waiting: '🔴', completed: '🟩' };
+const STATUS_LABELS = { open: 'Открыта', repair: 'В ремонте', completed: 'Выполнена' };
+const STATUS_ICONS = { open: '🟦', repair: '🟧', completed: '🟩' };
 
 async function apiFetch(path, options = {}) {
     const controller = new AbortController();
@@ -494,7 +494,7 @@ function openDetail(id) {
     // Status action buttons
     let footerHtml = '';
     if (currentUser && currentUser.permissions.canComplete && req.status !== 'completed') {
-        const statuses = [ {key:'repair',label:'🔧 В ремонт'}, {key:'waiting',label:'⏳ Ожидание'}, {key:'completed',label:'✅ Завершить'} ];
+        const statuses = [ {key:'repair',label:'🔧 В ремонт'}, {key:'completed',label:'✅ Завершить'} ];
         footerHtml = statuses.map(s =>
             `<button class="btn btn-sm ${s.key === 'completed' ? 'btn-success' : 'btn-outline'}" onclick="changeStatus('${req.id}','${s.key}')">${s.label}</button>`
         ).join(' ');
@@ -649,7 +649,6 @@ function updateDashboardStats() {
     const total = repairRequests.length;
     const open = repairRequests.filter(r => r.status === 'open' || !r.status).length;
     const repair = repairRequests.filter(r => r.status === 'repair').length;
-    const waiting = repairRequests.filter(r => r.status === 'waiting').length;
     const completed = repairRequests.filter(r => r.status === 'completed').length;
     const hours = repairRequests.reduce((s, r) => s + (r.downtimeHours || 0), 0);
 
@@ -658,7 +657,6 @@ function updateDashboardStats() {
             <div class="summary-item"><h3>Всего</h3><div class="stat-value">${total}</div></div>
             <div class="summary-item"><h3>Открыто</h3><div class="stat-value">${open}</div></div>
             <div class="summary-item"><h3>В ремонте</h3><div class="stat-value">${repair}</div></div>
-            <div class="summary-item"><h3>Ожидание</h3><div class="stat-value">${waiting}</div></div>
             <div class="summary-item"><h3>Выполнено</h3><div class="stat-value">${completed}</div></div>
             <div class="summary-item"><h3>Часы простоя</h3><div class="stat-value">${hours} ч</div></div>
         </div>
@@ -734,7 +732,7 @@ function printStatistics() {
         </head><body>
         <h1>Отчет по ремонтам</h1>
         <p>Дата формирования: ${new Date().toLocaleString('ru-RU')}</p>
-        <p>Всего: ${repairRequests.length} | Открыто: ${repairRequests.filter(r => r.status === 'open' || !r.status).length} | В ремонте: ${repairRequests.filter(r => r.status === 'repair').length} | Ожидание: ${repairRequests.filter(r => r.status === 'waiting').length} | Выполнено: ${repairRequests.filter(r => r.status === 'completed').length}</p>
+        <p>Всего: ${repairRequests.length} | Открыто: ${repairRequests.filter(r => r.status === 'open' || !r.status).length} | В ремонте: ${repairRequests.filter(r => r.status === 'repair').length} | Выполнено: ${repairRequests.filter(r => r.status === 'completed').length}</p>
 
         <h2>Сводка по оборудованию</h2>
         <table><thead><tr><th>Участок</th><th>Инв.№</th><th>Оборудование</th><th>Статус</th><th>Кол-во заявок</th><th>Простоев</th><th>Время простоя</th></tr></thead><tbody>
