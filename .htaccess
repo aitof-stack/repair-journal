@@ -1,13 +1,11 @@
-# .htaccess
 RewriteEngine On
 
-# Перенаправляем все запросы на index.html
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ index.html [L,QSA]
+# API requests → PHP handler
+RewriteRule ^api/ php/index.php [L,QSA]
 
-# Запрещаем доступ к определенным файлам
-<FilesMatch "^\.">
-    Order allow,deny
-    Deny from all
-</FilesMatch>
+# Static files exist? serve them directly
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule . - [L]
+
+# Everything else → index.html (SPA)
+RewriteRule ^(.*)$ index.html [L,QSA]
