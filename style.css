@@ -54,6 +54,7 @@ body {
     height: 100vh; height: 100dvh;
     display: flex; flex-direction: column;
     overflow: hidden;
+    padding-bottom: 64px;
 }
 
 /* ========== HEADER ========== */
@@ -83,10 +84,10 @@ body {
 
 /* ========== BOTTOM TABS ========== */
 .bottom-tabs {
-    flex-shrink: 0;
+    position: fixed; bottom: 0; left: 0; right: 0;
     background: white; border-top: 1px solid var(--gray-border);
     display: flex; z-index: 200;
-    padding-bottom: var(--safe-bottom);
+    padding-bottom: max(var(--safe-bottom), 8px);
     box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
 }
 .tab-btn {
@@ -392,6 +393,7 @@ body {
 @media (min-width: 768px) {
     body { background: #E8EAF0; }
     #appShell { max-width: 480px; margin: 0 auto; box-shadow: var(--shadow-lg); }
+    .bottom-tabs { max-width: 480px; left: 50%; transform: translateX(-50%); }
     .modal-content { max-width: 480px; left: 50%; transform: translateX(-50%); border-radius: var(--radius); bottom: auto; top: 10vh; }
     @keyframes slideUp { from { transform: translateX(-50%) translateY(40px); opacity: 0; } }
 }
