@@ -5,10 +5,10 @@ let capturedPhotos = [];
 let html5Scanner = null;
 let serverAvailable = false;
 const API_BASE = '/api';
-const SUPABASE_URL = window.SUPABASE_URL || '';
+const SUPABASE_URL_RAW = (window.SUPABASE_URL || '').replace(/\/rest\/v1\/?$/, '');
 const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || '';
 const SUPABASE_TABLE = 'requests';
-const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_URL.includes('supabase.co'));
+const USE_SUPABASE = !!(SUPABASE_URL_RAW && SUPABASE_ANON_KEY && SUPABASE_URL_RAW.includes('supabase.co'));
 
 const STATUS_LABELS = { open: 'Открыта', repair: 'В ремонте', waiting: 'Ожидание запчастей', completed: 'Выполнена' };
 const STATUS_ICONS = { open: '🟦', repair: '🟧', waiting: '🔴', completed: '🟩' };
@@ -224,7 +224,7 @@ function onScanSuccess(code) {
 // ========== SUPABASE SYNC ==========
 async function supabaseFetch(path, options = {}) {
     if (!USE_SUPABASE) throw new Error('Supabase not configured');
-    const url = SUPABASE_URL + '/rest/v1/' + SUPABASE_TABLE + path;
+    const url = SUPABASE_URL_RAW + '/rest/v1/' + SUPABASE_TABLE + path;
     const res = await fetch(url, {
         headers: {
             'apikey': SUPABASE_ANON_KEY,

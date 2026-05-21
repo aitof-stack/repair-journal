@@ -4,5 +4,5 @@
 // 3. Copy your URL and anon key from Settings → API
 // 4. Replace the placeholders below
 
-window.SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
-window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+window.SUPABASE_URL = 'https://ebgumfttxyrbtsvexnys.supabase.co';
+window.SUPABASE_ANON_KEY = 'sb_publishable_94z_UvPnnF1lweLoolE45g_1NuW8FLb';
