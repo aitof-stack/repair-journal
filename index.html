@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>ТОИР — Заявки на ремонт</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔧</text></svg>">
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+    <div id="loadingScreen">
+        <div class="spinner"></div>
+        <h2 style="font-size:20px;font-weight:500">Загрузка...</h2>
+        <div id="loadingStatus">Инициализация</div>
+    </div>
+
+    <div id="appShell" style="display:none">
+        <div class="connection-status online" id="connectionStatus">Онлайн</div>
+
+        <div class="app-header">
+            <span class="user-badge" id="userBadge">👤 Загрузка...</span>
+            <h1>🔧 ТОИР</h1>
+            <button class="header-btn" onclick="logout()" title="Выйти">🚪</button>
+        </div>
+
+        <div id="notification"></div>
+
+        <div class="tab-content">
+            <!-- TAB 1: ЗАЯВКИ -->
+            <div class="tab-pane active" id="tabRequests">
+                <div class="search-filter">
+                    <input type="text" id="searchInput" placeholder="🔍 Поиск...">
+                    <select id="statusFilter">
+                        <option value="all">Все статусы</option>
+                        <option value="open">Открыта</option>
+                        <option value="repair">В ремонте</option>
+                        <option value="waiting">Ожидание запчастей</option>
+                        <option value="completed">Выполнена</option>
+                    </select>
+                    <div class="filter-actions">
+                        <button class="btn btn-primary btn-sm" onclick="applyFilters()">Применить</button>
+                        <button class="btn btn-outline btn-sm" onclick="clearFilters()">Сброс</button>
+                    </div>
+                </div>
+
+                <div class="summary">
+                    <div class="summary-item"><h3>Всего</h3><div class="stat-value" id="totalRequests">0</div></div>
+                    <div class="summary-item"><h3>Открыто</h3><div class="stat-value" id="openRequests">0</div></div>
+                    <div class="summary-item"><h3>В ремонте</h3><div class="stat-value" id="repairRequests_count">0</div></div>
+                    <div class="summary-item"><h3>Выполнено</h3><div class="stat-value" id="completedRequests">0</div></div>
+                </div>
+
+                <div id="requestsList"></div>
+            </div>
+
+            <!-- TAB 2: НОВАЯ ЗАЯВКА -->
+            <div class="tab-pane" id="tabNew">
+                <div class="form-section">
+                    <h2>📝 Новая заявка</h2>
+                    <form id="repairForm">
+                        <div class="form-group">
+                            <label>Инвентарный номер</label>
+                            <div class="searchable-select-container">
+                                <input type="text" id="invNumberSearch" placeholder="Поиск или сканируйте...">
+                                <button type="button" class="scan-btn" onclick="openScanner()">📷 Сканировать</button>
+                                <select id="invNumber" size="4" required></select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Оборудование</label>
+                            <input type="text" id="equipmentName" readonly>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Участок</label>
+                            <select id="location" required>
+                                <option value="">Выберите</option>
+                                <option value="701">701</option><option value="702">702</option>
+                                <option value="713">713</option><option value="715">715</option>
+                                <option value="717">717</option><option value="719">719</option>
+                                <option value="723">723</option><option value="730">730</option>
+                                <option value="735">735</option><option value="740">740</option>
+                                <option value="760">760</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Модель</label>
+                            <input type="text" id="model" readonly>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Номер станка</label>
+                            <input type="text" id="machineNumber" readonly>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Описание неисправности</label>
+                            <textarea id="faultDescription" rows="3" placeholder="Подробно опишите проблему..." required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Номенклатура</label>
+                            <input type="text" id="productionItem" placeholder="Что производилось" value="-">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Фото неисправности</label>
+                            <button type="button" class="camera-btn" onclick="capturePhoto()">📸 Сделать фото</button>
+                            <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(event)">
+                            <div class="photo-preview" id="photoPreview"></div>
+                        </div>
+
+                        <div style="display:flex;gap:8px">
+                            <button type="button" class="btn btn-outline btn-block" onclick="clearForm()">Очистить</button>
+                            <button type="submit" class="btn btn-primary btn-block">✅ Отправить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- TAB 3: СТАТИСТИКА -->
+            <div class="tab-pane" id="tabStats">
+                <div class="form-section">
+                    <h2>📊 Статистика</h2>
+                    <div id="dashboardStats"></div>
+                    <div style="display:flex;gap:8px;margin-top:16px">
+                        <button class="btn btn-outline btn-sm btn-block" onclick="printStatistics()">🖨️ Печать</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM TABS -->
+    <div class="bottom-tabs" id="bottomTabs" style="display:none">
+        <button class="tab-btn active" data-tab="tabRequests">
+            <span class="tab-icon">📋</span> Заявки
+        </button>
+        <button class="tab-btn" data-tab="tabNew">
+            <span class="tab-icon">➕</span> Новая
+        </button>
+        <button class="tab-btn" data-tab="tabStats">
+            <span class="tab-icon">📊</span> Статистика
+        </button>
+    </div>
+
+    <!-- SCANNER OVERLAY -->
+    <div id="scannerOverlay">
+        <button class="scanner-close" onclick="closeScanner()">✕</button>
+        <div class="scanner-frame"></div>
+        <div class="scanner-hint">Наведите камеру на штрихкод оборудования</div>
+        <div id="scannerContainer" style="width:100%;height:100%"></div>
+    </div>
+
+    <!-- DETAIL MODAL -->
+    <div class="modal" id="detailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="detailTitle">Заявка</h2>
+                <button class="modal-close" onclick="closeDetail()">✕</button>
+            </div>
+            <div class="modal-body" id="detailBody"></div>
+            <div class="modal-footer" id="detailFooter"></div>
+        </div>
+    </div>
+
+    <script src="firebase-config.js"></script>
+    <script src="auth.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
