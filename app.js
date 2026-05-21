@@ -5,6 +5,10 @@ let capturedPhotos = [];
 let html5Scanner = null;
 let serverAvailable = false;
 const API_BASE = '/api';
+const SUPABASE_URL = window.SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || '';
+const SUPABASE_TABLE = 'requests';
+const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_URL.includes('supabase.co'));
 
 const STATUS_LABELS = { open: 'Открыта', repair: 'В ремонте', waiting: 'Ожидание запчастей', completed: 'Выполнена' };
 const STATUS_ICONS = { open: '🟦', repair: '🟧', waiting: '🔴', completed: '🟩' };
@@ -217,14 +221,147 @@ function onScanSuccess(code) {
     showNotification('Штрихкод распознан, но оборудование не найдено', 'warning');
 }
 
+// ========== SUPABASE SYNC ==========
+async function supabaseFetch(path, options = {}) {
+    if (!USE_SUPABASE) throw new Error('Supabase not configured');
+    const url = SUPABASE_URL + '/rest/v1/' + SUPABASE_TABLE + path;
+    const res = await fetch(url, {
+        headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal',
+            ...options.headers
+        },
+        ...options
+    });
+    if (!res.ok) throw new Error('Supabase ' + res.status);
+    return res;
+}
+
+async function syncToSupabase() {
+    if (!USE_SUPABASE) return false;
+    try {
+        const existing = await loadFromSupabase();
+        const existingMap = {};
+        (existing || []).forEach(r => { existingMap[r.id] = r; });
+        const allIds = new Set([...Object.keys(existingMap), ...repairRequests.map(r => r.id)]);
+        const ops = [];
+        allIds.forEach(id => {
+            const local = repairRequests.find(r => r.id === id);
+            const remote = existingMap[id];
+            if (!remote && local) {
+                ops.push(supabaseFetch('', {
+                    method: 'POST',
+                    body: JSON.stringify(requestToRow(local))
+                }).catch(() => {}));
+            } else if (remote && !local) {
+                ops.push(supabaseFetch('?id=eq.' + encodeURIComponent(id), {
+                    method: 'DELETE'
+                }).catch(() => {}));
+            } else if (local && remote && JSON.stringify(remote) !== JSON.stringify(requestToRow(local))) {
+                ops.push(supabaseFetch('?id=eq.' + encodeURIComponent(id), {
+                    method: 'PATCH',
+                    body: JSON.stringify(requestToRow(local))
+                }).catch(() => {}));
+            }
+        });
+        await Promise.all(ops);
+        return true;
+    } catch (e) {
+        console.warn('Supabase sync error:', e);
+        return false;
+    }
+}
+
+async function loadFromSupabase() {
+    if (!USE_SUPABASE) return null;
+    try {
+        const res = await supabaseFetch('?select=*&order=created_at.desc', { method: 'GET' });
+        const rows = await res.json();
+        return (rows || []).map(rowToRequest);
+    } catch (e) {
+        console.warn('Supabase load error:', e);
+        return null;
+    }
+}
+
+function requestToRow(r) {
+    return {
+        id: r.id,
+        date: r.date || '',
+        time: r.time || '',
+        author: r.author || '',
+        location: r.location || '',
+        inv_number: r.invNumber || '',
+        equipment_name: r.equipmentName || '',
+        model: r.model || '',
+        machine_number: r.machineNumber || '',
+        fault_description: r.faultDescription || '',
+        status: r.status || 'open',
+        downtime_count: r.downtimeCount || 0,
+        downtime_hours: r.downtimeHours || 0,
+        production_item: r.productionItem || '',
+        photos: JSON.stringify(r.photos || []),
+        created_at: r.createdAt || new Date().toISOString(),
+        updated_at: r.updatedAt || new Date().toISOString(),
+        repair_end_date: r.repairEndDate || null,
+        repair_end_time: r.repairEndTime || null
+    };
+}
+
+function rowToRequest(r) {
+    return {
+        id: r.id,
+        date: r.date || '',
+        time: r.time || '',
+        author: r.author || '',
+        location: r.location || '',
+        invNumber: r.inv_number || '',
+        equipmentName: r.equipment_name || '',
+        model: r.model || '',
+        machineNumber: r.machine_number || '',
+        faultDescription: r.fault_description || '',
+        status: r.status || 'open',
+        downtimeCount: r.downtime_count || 0,
+        downtimeHours: r.downtime_hours || 0,
+        productionItem: r.production_item || '',
+        photos: typeof r.photos === 'string' ? (r.photos ? JSON.parse(r.photos) : []) : (r.photos || []),
+        createdAt: r.created_at || '',
+        updatedAt: r.updated_at || '',
+        repairEndDate: r.repair_end_date || '',
+        repairEndTime: r.repair_end_time || ''
+    };
+}
+
 // ========== REQUESTS ==========
 async function loadRequests() {
+    let serverLoaded = false;
     try {
         const data = await apiFetch('/requests');
         repairRequests = data;
         serverAvailable = true;
+        serverLoaded = true;
     } catch {
         try { repairRequests = JSON.parse(localStorage.getItem('repair_requests')) || []; } catch { repairRequests = []; }
+    }
+    if (USE_SUPABASE) {
+        const supabaseData = await loadFromSupabase();
+        if (supabaseData && supabaseData.length >= repairRequests.length) {
+            repairRequests = supabaseData;
+        } else if (supabaseData && supabaseData.length > 0 && supabaseData.length < repairRequests.length) {
+            const remoteIds = new Set(supabaseData.map(r => r.id));
+            const missing = repairRequests.filter(r => !remoteIds.has(r.id));
+            if (serverLoaded && missing.length > 0) {
+                // push local missing ones to Supabase silently
+                missing.forEach(r => {
+                    supabaseFetch('', {
+                        method: 'POST',
+                        body: JSON.stringify(requestToRow(r))
+                    }).catch(() => {});
+                });
+            }
+        }
     }
     renderRequests();
     updateSummary();
@@ -235,7 +372,10 @@ async function saveToLS() {
     try {
         serverAvailable = true;
         await apiFetch('/requests', { method: 'PUT', body: JSON.stringify(repairRequests) });
-    } catch { /* server not available — saved locally */ }
+    } catch { /* server not available */ }
+    if (USE_SUPABASE) {
+        syncToSupabase().catch(() => {});
+    }
 }
 
 async function syncToServer() {
@@ -617,8 +757,13 @@ function printStatistics() {
 
 // ========== SYNC ==========
 async function syncAllData() {
-    showNotification('Синхронизация с сервером...', 'info');
-    const ok = await syncToServer();
+    showNotification('Синхронизация...', 'info');
+    let ok = false;
+    try { ok = await syncToServer(); } catch {}
+    if (USE_SUPABASE) {
+        const sb = await syncToSupabase();
+        if (sb) ok = true;
+    }
     if (ok) showNotification('Данные синхронизированы', 'success');
     else showNotification('Сервер недоступен, данные сохранены локально', 'warning');
 }
