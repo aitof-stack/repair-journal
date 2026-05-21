@@ -36,6 +36,7 @@
                         <option value="all">Все статусы</option>
                         <option value="open">Открыта</option>
                         <option value="repair">В ремонте</option>
+                        <option value="waiting">Ожидание запчастей</option>
                         <option value="completed">Выполнена</option>
                     </select>
                     <div class="filter-actions">
@@ -124,10 +125,10 @@
             <!-- TAB 3: СТАТИСТИКА -->
             <div class="tab-pane" id="tabStats">
                 <div class="form-section">
-                    <h2>📊 Отчет по ремонтам</h2>
-                    <div id="reportContent"></div>
+                    <h2>📊 Статистика</h2>
+                    <div id="dashboardStats"></div>
                     <div style="display:flex;gap:8px;margin-top:16px">
-                        <button class="btn btn-primary btn-block" onclick="exportPDF()">📄 Экспорт в PDF</button>
+                        <button class="btn btn-outline btn-sm btn-block" onclick="printStatistics()">🖨️ Печать</button>
                     </div>
                 </div>
             </div>
