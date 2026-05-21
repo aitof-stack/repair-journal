@@ -126,8 +126,14 @@
                 <div class="form-section">
                     <h2>📊 Статистика</h2>
                     <div id="dashboardStats"></div>
+                </div>
+            </div>
+            <div class="tab-pane" id="tabReport">
+                <div class="form-section">
+                    <h2>📄 Отчет по ремонтам</h2>
+                    <div id="reportContent"></div>
                     <div style="display:flex;gap:8px;margin-top:16px">
-                        <button class="btn btn-outline btn-sm btn-block" onclick="printStatistics()">🖨️ Печать</button>
+                        <button class="btn btn-primary btn-block" onclick="exportPDF()">📄 Экспорт в PDF</button>
                     </div>
                 </div>
             </div>
@@ -144,6 +150,9 @@
         </button>
         <button class="tab-btn" data-tab="tabStats">
             <span class="tab-icon">📊</span> Статистика
+        </button>
+        <button class="tab-btn" data-tab="tabReport">
+            <span class="tab-icon">📄</span> Отчет
         </button>
     </div>
 

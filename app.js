@@ -84,6 +84,7 @@ function setupTabs() {
             btn.classList.add('active');
             document.getElementById(btn.dataset.tab).classList.add('active');
             if (btn.dataset.tab === 'tabStats') updateDashboardStats();
+            if (btn.dataset.tab === 'tabReport') renderReport();
         });
     });
 }
@@ -665,6 +666,92 @@ function updateDashboardStats() {
 
 function openDashboard() { switchTab('tabStats'); }
 function closeDashboard() {}
+
+// ========== REPORT ==========
+function renderReport() {
+    const container = document.getElementById('reportContent');
+    if (!container) return;
+    if (repairRequests.length === 0) {
+        container.innerHTML = '<p style="color:var(--gray);text-align:center;padding:20px">Нет заявок для отчета</p>';
+        return;
+    }
+    const total = repairRequests.length;
+    const open = repairRequests.filter(r => r.status === 'open' || !r.status).length;
+    const repair = repairRequests.filter(r => r.status === 'repair').length;
+    const completed = repairRequests.filter(r => r.status === 'completed').length;
+    const hours = repairRequests.reduce((s, r) => s + (r.downtimeHours || 0), 0);
+
+    const grouped = {};
+    repairRequests.forEach(r => {
+        const key = r.invNumber || '—';
+        if (!grouped[key]) grouped[key] = { ...r, downtimeCount: 0, downtimeHours: 0, count: 0 };
+        grouped[key].downtimeCount += (r.downtimeCount || 0);
+        grouped[key].downtimeHours += (r.downtimeHours || 0);
+        grouped[key].count++;
+        if (r.updatedAt > (grouped[key].updatedAt || '')) grouped[key].status = r.status;
+    });
+
+    const rows = Object.values(grouped).map(g =>
+        `<tr><td>${g.location || '—'}</td><td>${g.invNumber}</td><td>${g.equipmentName || '—'}</td><td>${STATUS_LABELS[g.status] || g.status}</td><td>${g.count}</td><td>${g.downtimeCount}</td><td>${g.downtimeHours.toFixed(1)} ч</td></tr>`
+    ).join('');
+
+    container.innerHTML = `
+        <div class="summary">
+            <div class="summary-item"><h3>Всего</h3><div class="stat-value">${total}</div></div>
+            <div class="summary-item"><h3>Открыто</h3><div class="stat-value">${open}</div></div>
+            <div class="summary-item"><h3>В ремонте</h3><div class="stat-value">${repair}</div></div>
+            <div class="summary-item"><h3>Выполнено</h3><div class="stat-value">${completed}</div></div>
+        </div>
+        <p style="font-size:13px;color:var(--text-secondary);margin:12px 0 8px">Дата формирования: ${new Date().toLocaleString('ru-RU')}</p>
+        <h3 style="font-size:14px;margin:16px 0 8px;color:var(--primary)">Сводка по оборудованию</h3>
+        <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+                <thead><tr style="background:var(--primary);color:white">
+                    <th style="padding:6px;border:1px solid #ddd">Участок</th>
+                    <th style="padding:6px;border:1px solid #ddd">Инв.№</th>
+                    <th style="padding:6px;border:1px solid #ddd">Оборудование</th>
+                    <th style="padding:6px;border:1px solid #ddd">Статус</th>
+                    <th style="padding:6px;border:1px solid #ddd">Заявок</th>
+                    <th style="padding:6px;border:1px solid #ddd">Простоев</th>
+                    <th style="padding:6px;border:1px solid #ddd">Время</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function exportPDF() {
+    renderReport();
+    const content = document.getElementById('reportContent').innerHTML;
+    const style = `
+        <style>
+            body{font-family:Arial;margin:20px;font-size:13px}
+            h1{color:#1565C0;font-size:20px}
+            h3{color:#1565C0;margin-top:20px}
+            table{border-collapse:collapse;width:100%;margin-top:10px}
+            th,td{border:1px solid #ddd;padding:6px;text-align:left;font-size:11px}
+            th{background:#1565C0;color:white}
+            tr:nth-child(even){background:#f5f5f5}
+            .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+            .summary-item{background:#f5f5f5;padding:10px;border-radius:6px;text-align:center}
+            .summary-item h3{font-size:11px;color:#666;margin:0 0 4px;text-transform:uppercase}
+            .summary-item .stat-value{font-size:20px;font-weight:700;color:#212121}
+        </style>
+    `;
+    const html = `
+        <html><head><title>Отчет по ремонтам</title>${style}</head><body>
+        <h1>Отчет по ремонтам</h1>
+        <p>Дата формирования: ${new Date().toLocaleString('ru-RU')}</p>
+        ${content.replace(/<button[\s\S]*?<\/button>/g, '')}
+        </body></html>
+    `;
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 500);
+}
 
 // ========== EXPORT / IMPORT ==========
 function exportRepairData() {
