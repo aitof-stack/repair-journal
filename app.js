@@ -517,8 +517,13 @@ function changeStatus(id, newStatus) {
         const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
         req.repairEndDate = today;
         req.repairEndTime = timeStr;
-        req.downtimeCount = (req.downtimeCount || 0) + 1;
-        req.downtimeHours = (req.downtimeHours || 0) + 1;
+        req.downtimeCount = 1;
+        if (req.createdAt) {
+            const diffMs = now.getTime() - new Date(req.createdAt).getTime();
+            req.downtimeHours = Math.round(diffMs / (1000 * 60 * 60));
+        } else {
+            req.downtimeHours = 1;
+        }
     }
     req.status = newStatus;
     req.updatedAt = new Date().toISOString();
