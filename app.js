@@ -52,6 +52,27 @@ async function initApp() {
     await Promise.all([loadEquipmentDatabase(), loadRequests()]).catch(() => {});
 
     document.getElementById('loadingScreen').style.display = 'none';
+
+    if (USE_SUPABASE) {
+        setInterval(async () => {
+            const data = await loadFromSupabase();
+            if (data && data.length > 0) {
+                const localIds = new Set(repairRequests.map(r => r.id));
+                let changed = false;
+                data.forEach(r => {
+                    if (!localIds.has(r.id)) {
+                        repairRequests.push(r);
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    localStorage.setItem('repair_requests', JSON.stringify(repairRequests));
+                    renderRequests();
+                    updateSummary();
+                }
+            }
+        }, 15000);
+    }
 }
 
 // ========== TABS ==========
