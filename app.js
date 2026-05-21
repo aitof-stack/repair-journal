@@ -83,8 +83,7 @@ function setupTabs() {
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById(btn.dataset.tab).classList.add('active');
-            if (btn.dataset.tab === 'tabStats') updateDashboardStats();
-            if (btn.dataset.tab === 'tabReport') renderReport();
+            if (btn.dataset.tab === 'tabStats') renderReport();
         });
     });
 }
@@ -643,29 +642,7 @@ function populateInvNumberSelect() {
 
 async function updateEquipmentDB() { await loadEquipmentDatabase(); showNotification('База обновлена', 'success'); }
 
-// ========== DASHBOARD ==========
-function updateDashboardStats() {
-    const container = document.getElementById('dashboardStats');
-    if (!container) return;
-    const total = repairRequests.length;
-    const open = repairRequests.filter(r => r.status === 'open' || !r.status).length;
-    const repair = repairRequests.filter(r => r.status === 'repair').length;
-    const completed = repairRequests.filter(r => r.status === 'completed').length;
-    const hours = repairRequests.reduce((s, r) => s + (r.downtimeHours || 0), 0);
-
-    container.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div class="summary-item"><h3>Всего</h3><div class="stat-value">${total}</div></div>
-            <div class="summary-item"><h3>Открыто</h3><div class="stat-value">${open}</div></div>
-            <div class="summary-item"><h3>В ремонте</h3><div class="stat-value">${repair}</div></div>
-            <div class="summary-item"><h3>Выполнено</h3><div class="stat-value">${completed}</div></div>
-            <div class="summary-item"><h3>Часы простоя</h3><div class="stat-value">${hours} ч</div></div>
-        </div>
-    `;
-}
-
 function openDashboard() { switchTab('tabStats'); }
-function closeDashboard() {}
 
 // ========== REPORT ==========
 function renderReport() {
@@ -722,35 +699,71 @@ function renderReport() {
 }
 
 function exportPDF() {
-    renderReport();
-    const content = document.getElementById('reportContent').innerHTML;
-    const style = `
-        <style>
-            body{font-family:Arial;margin:20px;font-size:13px}
-            h1{color:#1565C0;font-size:20px}
-            h3{color:#1565C0;margin-top:20px}
-            table{border-collapse:collapse;width:100%;margin-top:10px}
-            th,td{border:1px solid #ddd;padding:6px;text-align:left;font-size:11px}
-            th{background:#1565C0;color:white}
-            tr:nth-child(even){background:#f5f5f5}
-            .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
-            .summary-item{background:#f5f5f5;padding:10px;border-radius:6px;text-align:center}
-            .summary-item h3{font-size:11px;color:#666;margin:0 0 4px;text-transform:uppercase}
-            .summary-item .stat-value{font-size:20px;font-weight:700;color:#212121}
-        </style>
-    `;
-    const html = `
-        <html><head><title>Отчет по ремонтам</title>${style}</head><body>
-        <h1>Отчет по ремонтам</h1>
-        <p>Дата формирования: ${new Date().toLocaleString('ru-RU')}</p>
-        ${content.replace(/<button[\s\S]*?<\/button>/g, '')}
-        </body></html>
-    `;
+    const total = repairRequests.length;
+    const open = repairRequests.filter(r => r.status === 'open' || !r.status).length;
+    const repair = repairRequests.filter(r => r.status === 'repair').length;
+    const completed = repairRequests.filter(r => r.status === 'completed').length;
+
+    const grouped = {};
+    repairRequests.forEach(r => {
+        const key = r.invNumber || '—';
+        if (!grouped[key]) grouped[key] = { ...r, downtimeCount: 0, downtimeHours: 0, count: 0 };
+        grouped[key].downtimeCount += (r.downtimeCount || 0);
+        grouped[key].downtimeHours += (r.downtimeHours || 0);
+        grouped[key].count++;
+        if (r.updatedAt > (grouped[key].updatedAt || '')) grouped[key].status = r.status;
+    });
+
+    const rows = Object.values(grouped).map(g =>
+        `<tr><td>${g.location || '—'}</td><td>${g.invNumber}</td><td>${g.equipmentName || '—'}</td><td>${STATUS_LABELS[g.status] || g.status}</td><td>${g.count}</td><td>${g.downtimeCount}</td><td>${g.downtimeHours.toFixed(1)} ч</td></tr>`
+    ).join('');
+
+    const detailRows = [...repairRequests].reverse().map((r, i) => {
+        const label = STATUS_LABELS[r.status] || r.status || 'Открыта';
+        return `<tr><td>${i + 1}</td><td>${r.date || '—'}</td><td>${r.author || '—'}</td><td>${r.location || '—'}</td><td>${r.invNumber || '—'}</td><td>${r.equipmentName || '—'}</td><td>${label}</td><td>${r.downtimeHours || 0}</td></tr>`;
+    }).join('');
+
     const win = window.open('', '_blank');
-    win.document.write(html);
+    win.document.write(`
+        <html><head><title>Отчет по ремонтам</title>
+        <style>
+            body{font-family:Arial;margin:20px;font-size:13px;color:#212121}
+            h1{color:#1565C0;font-size:22px;margin-bottom:4px}
+            p{color:#666;font-size:12px;margin:0 0 16px}
+            h2{color:#1565C0;font-size:16px;margin:20px 0 8px;border-bottom:2px solid #1565C0;padding-bottom:4px}
+            table{border-collapse:collapse;width:100%;margin-top:8px}
+            th,td{border:1px solid #ccc;padding:5px 7px;text-align:left;font-size:11px}
+            th{background:#1565C0;color:white;font-weight:600}
+            tr:nth-child(even){background:#f5f5f5}
+            .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+            .stat-box{background:#f0f4f8;padding:10px;border-radius:6px;text-align:center}
+            .stat-box .num{font-size:22px;font-weight:700;color:#1565C0}
+            .stat-box .label{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px}
+            @media print{body{margin:15mm}button{display:none}}
+        </style>
+        </head><body>
+        <h1>Отчет по ремонтам</h1>
+        <p>Дата формирования: ${new Date().toLocaleString('ru-RU')} · Всего заявок: ${total}</p>
+
+        <div class="stats">
+            <div class="stat-box"><div class="num">${total}</div><div class="label">Всего</div></div>
+            <div class="stat-box"><div class="num">${open}</div><div class="label">Открыто</div></div>
+            <div class="stat-box"><div class="num">${repair}</div><div class="label">В ремонте</div></div>
+            <div class="stat-box"><div class="num">${completed}</div><div class="label">Выполнено</div></div>
+        </div>
+
+        <h2>Сводка по оборудованию</h2>
+        <table><thead><tr><th>Участок</th><th>Инв.№</th><th>Оборудование</th><th>Статус</th><th>Заявок</th><th>Простоев</th><th>Время</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7">Нет данных</td></tr>'}</tbody></table>
+
+        <h2>Детальный список заявок</h2>
+        <table><thead><tr><th>№</th><th>Дата</th><th>Автор</th><th>Участок</th><th>Инв.№</th><th>Оборудование</th><th>Статус</th><th>Простой (ч)</th></tr></thead>
+        <tbody>${detailRows || '<tr><td colspan="8">Нет данных</td></tr>'}</tbody></table>
+
+        <p style="text-align:center;color:#999;margin-top:30px;font-size:10px">— Конец отчета —</p>
+        </body></html>
+    `);
     win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); }, 500);
 }
 
 // ========== EXPORT / IMPORT ==========
@@ -812,68 +825,7 @@ function formatISO(iso) {
     catch { return iso; }
 }
 
-function printStatistics() {
-    const content = `
-        <html><head><title>Отчет по ремонтам</title>
-        <style>body{font-family:Arial;margin:20px}h1{color:#1565C0}h2{color:#1565C0;margin-top:30px}table{border-collapse:collapse;width:100%;margin-top:10px}th,td{border:1px solid #ddd;padding:6px;text-align:left;font-size:13px}th{background:#1565C0;color:white;white-space:nowrap}tr:nth-child(even){background:#f5f5f5}</style>
-        </head><body>
-        <h1>Отчет по ремонтам</h1>
-        <p>Дата формирования: ${new Date().toLocaleString('ru-RU')}</p>
-        <p>Всего: ${repairRequests.length} | Открыто: ${repairRequests.filter(r => r.status === 'open' || !r.status).length} | В ремонте: ${repairRequests.filter(r => r.status === 'repair').length} | Выполнено: ${repairRequests.filter(r => r.status === 'completed').length}</p>
 
-        <h2>Сводка по оборудованию</h2>
-        <table><thead><tr><th>Участок</th><th>Инв.№</th><th>Оборудование</th><th>Статус</th><th>Кол-во заявок</th><th>Простоев</th><th>Время простоя</th></tr></thead><tbody>
-        ${(() => {
-            const grouped = {};
-            repairRequests.forEach(r => {
-                const key = r.invNumber || '—';
-                if (!grouped[key]) grouped[key] = { ...r, downtimeCount: 0, downtimeHours: 0, count: 0 };
-                grouped[key].downtimeCount += (r.downtimeCount || 0);
-                grouped[key].downtimeHours += (r.downtimeHours || 0);
-                grouped[key].count++;
-                if (r.updatedAt > (grouped[key].updatedAt || '')) grouped[key].status = r.status;
-            });
-            return Object.values(grouped).map(g =>
-                `<tr><td>${g.location || '—'}</td><td>${g.invNumber}</td><td>${g.equipmentName || '—'}</td><td>${STATUS_LABELS[g.status] || g.status}</td><td>${g.count}</td><td>${g.downtimeCount}</td><td>${g.downtimeHours.toFixed(1)} ч</td></tr>`
-            ).join('');
-        })()}
-        </tbody></table>
-
-        <h2>Детальный список заявок</h2>
-        <table><thead><tr>
-            <th>№</th><th>Дата подачи</th><th>Автор</th><th>Участок</th><th>Инв.№</th><th>Оборудование</th>
-            <th>Статус</th><th>Посл. изменение</th><th>Завершено</th><th>Простой (ч)</th><th>Неисправность</th>
-        </tr></thead><tbody>
-        ${(() => {
-            if (repairRequests.length === 0) return '<tr><td colspan="11">Нет заявок</td></tr>';
-            return [...repairRequests].reverse().map((r, i) => {
-                const statusLabel = STATUS_LABELS[r.status] || r.status || 'Открыта';
-                const submitTime = formatDT(r.date, r.time);
-                const updateTime = formatISO(r.updatedAt);
-                const endTime = r.status === 'completed' ? formatDT(r.repairEndDate, r.repairEndTime) : '—';
-                return `<tr>
-                    <td>${i + 1}</td>
-                    <td style="white-space:nowrap">${submitTime}</td>
-                    <td>${r.author || '—'}</td>
-                    <td>${r.location || '—'}</td>
-                    <td>${r.invNumber || '—'}</td>
-                    <td>${r.equipmentName || '—'}</td>
-                    <td>${statusLabel}</td>
-                    <td style="white-space:nowrap">${updateTime}</td>
-                    <td style="white-space:nowrap">${endTime}</td>
-                    <td>${r.downtimeHours || 0}</td>
-                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${(r.faultDescription || '').substring(0, 80)}</td>
-                </tr>`;
-            }).join('');
-        })()}
-        </tbody></table>
-        <p style="margin-top:20px;color:#888;font-size:12px">Сгенерировано: ${new Date().toLocaleString('ru-RU')}</p>
-        </body></html>`;
-    const w = window.open('', '_blank');
-    w.document.write(content);
-    w.document.close();
-    setTimeout(() => w.print(), 300);
-}
 
 // ========== SYNC ==========
 async function syncAllData() {
@@ -917,9 +869,8 @@ window.updateEquipmentDB = updateEquipmentDB;
 window.applyFilters = applyFilters;
 window.clearFilters = clearFilters;
 window.openDashboard = openDashboard;
-window.closeDashboard = closeDashboard;
+window.exportPDF = exportPDF;
 window.exportRepairData = exportRepairData;
-window.printStatistics = printStatistics;
 window.completeRequest = completeRequest;
 window.deleteRequest = deleteRequest;
 window.openDetail = openDetail;
