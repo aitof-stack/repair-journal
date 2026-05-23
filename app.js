@@ -846,6 +846,7 @@ window.onclick = function(e) {
 };
 
 // ========== INIT ==========
+(function() {
 if (location.protocol === 'file:') {
     document.getElementById('loadingScreen').innerHTML = '<div style="text-align:center;padding:40px;color:#c62828"><h2>Ошибка</h2><p>Откройте приложение через HTTP-сервер:</p><code style="display:block;padding:12px;background:#f5f5f5;border-radius:8px;margin:16px 0">powershell -ExecutionPolicy Bypass -File server.ps1</code><p>Затем откройте <b>http://localhost:8080</b></p></div>';
     return;
@@ -855,6 +856,7 @@ if ('serviceWorker' in navigator) {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);
 else initApp();
+})();
 
 // ========== GLOBALS ==========
 window.syncAllData = syncAllData;
