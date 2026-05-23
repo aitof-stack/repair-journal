@@ -324,16 +324,19 @@ async function syncToSupabase() {
     }
 }
 
-async function loadFromSupabase() {
+async function loadFromSupabase(retries = 2) {
     if (!USE_SUPABASE) return null;
-    try {
-        const res = await supabaseFetch('?select=*&order=created_at.desc', { method: 'GET' });
-        const rows = await res.json();
-        return (rows || []).map(rowToRequest);
-    } catch (e) {
-        console.warn('Supabase load error:', e);
-        return null;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const res = await supabaseFetch('?select=*&order=created_at.desc', { method: 'GET' });
+            const rows = await res.json();
+            return (rows || []).map(rowToRequest);
+        } catch (e) {
+            console.warn('Supabase load error (попытка ' + (attempt + 1) + '/' + (retries + 1) + '):', e);
+            if (attempt < retries) await new Promise(r => setTimeout(r, 2000));
+        }
     }
+    return null;
 }
 
 function requestToRow(r) {
@@ -843,6 +846,10 @@ window.onclick = function(e) {
 };
 
 // ========== INIT ==========
+if (location.protocol === 'file:') {
+    document.getElementById('loadingScreen').innerHTML = '<div style="text-align:center;padding:40px;color:#c62828"><h2>Ошибка</h2><p>Откройте приложение через HTTP-сервер:</p><code style="display:block;padding:12px;background:#f5f5f5;border-radius:8px;margin:16px 0">powershell -ExecutionPolicy Bypass -File server.ps1</code><p>Затем откройте <b>http://localhost:8080</b></p></div>';
+    return;
+}
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js').catch(() => {});
 }
