@@ -401,6 +401,8 @@ async function loadRequests() {
             if (supabaseData && supabaseData.length > 0) {
                 repairRequests = supabaseData;
                 localStorage.setItem('repair_requests', JSON.stringify(repairRequests));
+            } else {
+                console.warn('Supabase не ответил, данные из кеша');
             }
         }
     } else if (!loaded) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'toir-v2';
+const CACHE_NAME = 'toir-v3';
 const urlsToCache = [
     './',
     './index.html',
