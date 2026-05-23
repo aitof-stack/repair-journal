@@ -197,6 +197,19 @@ function openScanner() {
     document.getElementById('scannerOverlay').classList.add('active');
     const container = document.getElementById('scannerContainer');
     container.innerHTML = '';
+    if (typeof Html5Qrcode === 'undefined') {
+        showNotification('Загрузка сканера...', 'info');
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+        s.onload = function() { startScanner(); };
+        s.onerror = function() { showNotification('Не удалось загрузить сканер', 'error'); };
+        document.head.appendChild(s);
+        return;
+    }
+    startScanner();
+}
+
+function startScanner() {
     try {
         html5Scanner = new Html5Qrcode("scannerContainer");
         html5Scanner.start(
@@ -835,5 +848,6 @@ window.closeDetail = closeDetail;
 window.changeStatus = changeStatus;
 window.openScanner = openScanner;
 window.closeScanner = closeScanner;
+window.startScanner = startScanner;
 window.capturePhoto = capturePhoto;
 window.handlePhoto = handlePhoto;
