@@ -44,6 +44,5 @@ powershell -ExecutionPolicy Bypass -File server.ps1
 
 - Чистый HTML/CSS/JS (без фреймворков)
 - Supabase (REST API, PostgreSQL)
-- Firebase (конфигурация подключения)
 - GitHub Pages (хостинг)
 - PWA (Service Worker, Manifest)

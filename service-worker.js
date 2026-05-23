@@ -5,6 +5,7 @@ const urlsToCache = [
     './login.html',
     './style.css',
     './auth.js',
+    './supabase-config.js',
     './app.js'
 ];
 
