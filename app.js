@@ -843,6 +843,9 @@ window.onclick = function(e) {
 };
 
 // ========== INIT ==========
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+}
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);
 else initApp();
 
