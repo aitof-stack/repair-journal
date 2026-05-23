@@ -56,20 +56,22 @@ async function initApp() {
     if (USE_SUPABASE) {
         setInterval(async () => {
             const data = await loadFromSupabase();
-            if (data && data.length > 0) {
-                const localIds = new Set(repairRequests.map(r => r.id));
-                let changed = false;
-                data.forEach(r => {
-                    if (!localIds.has(r.id)) {
-                        repairRequests.push(r);
-                        changed = true;
-                    }
-                });
-                if (changed) {
-                    localStorage.setItem('repair_requests', JSON.stringify(repairRequests));
-                    renderRequests();
-                    updateSummary();
+            if (!data) return;
+            const localMap = {};
+            repairRequests.forEach(r => { localMap[r.id] = r; });
+            let changed = false;
+            data.forEach(r => {
+                const exist = localMap[r.id];
+                if (!exist) { repairRequests.push(r); changed = true; }
+                else if (exist.updatedAt !== r.updatedAt) {
+                    Object.assign(exist, r);
+                    changed = true;
                 }
+            });
+            if (changed) {
+                localStorage.setItem('repair_requests', JSON.stringify(repairRequests));
+                renderRequests();
+                updateSummary();
             }
         }, 15000);
     }
@@ -265,7 +267,7 @@ async function supabaseFetch(path, options = {}) {
     if (!USE_SUPABASE) throw new Error('Supabase not configured');
     const url = SUPABASE_URL_RAW + '/rest/v1/' + SUPABASE_TABLE + path;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
+    const timer = setTimeout(() => controller.abort(), 15000);
     try {
         const res = await fetch(url, {
             headers: {
@@ -384,30 +386,40 @@ function rowToRequest(r) {
 
 // ========== REQUESTS ==========
 async function loadRequests() {
+    let loaded = false;
     try {
         const data = await apiFetch('/requests');
         repairRequests = data;
         serverAvailable = true;
-    } catch {
+        loaded = true;
+    } catch { /* server not available */ }
+    if (!loaded && USE_SUPABASE) {
+        try { repairRequests = JSON.parse(localStorage.getItem('repair_requests')) || []; } catch { repairRequests = []; }
+        if (repairRequests.length === 0) {
+            document.getElementById('loadingStatus').textContent = 'Синхронизация...';
+            const supabaseData = await loadFromSupabase();
+            if (supabaseData && supabaseData.length > 0) {
+                repairRequests = supabaseData;
+                localStorage.setItem('repair_requests', JSON.stringify(repairRequests));
+            }
+        }
+    } else if (!loaded) {
         try { repairRequests = JSON.parse(localStorage.getItem('repair_requests')) || []; } catch { repairRequests = []; }
     }
     renderRequests();
     updateSummary();
-    if (USE_SUPABASE) {
+    if (USE_SUPABASE && loaded) {
         loadFromSupabase().then(supabaseData => {
             if (!supabaseData) return;
-            if (supabaseData.length > 0) {
-                const localIds = new Set(repairRequests.map(r => r.id));
-                const merged = [...repairRequests];
-                supabaseData.forEach(r => {
-                    if (!localIds.has(r.id)) merged.push(r);
-                });
-                if (merged.length > repairRequests.length) {
-                    repairRequests = merged;
-                    localStorage.setItem('repair_requests', JSON.stringify(repairRequests));
-                    renderRequests();
-                    updateSummary();
-                }
+            const localIds = new Set(repairRequests.map(r => r.id));
+            let changed = false;
+            supabaseData.forEach(r => {
+                if (!localIds.has(r.id)) { repairRequests.push(r); changed = true; }
+            });
+            if (changed) {
+                localStorage.setItem('repair_requests', JSON.stringify(repairRequests));
+                renderRequests();
+                updateSummary();
             }
         }).catch(() => {});
     }
