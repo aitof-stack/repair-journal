@@ -820,8 +820,6 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 else initApp();
 
 // ========== GLOBALS ==========
-window.syncWithFirebase = syncWithFirebase;
-async function syncWithFirebase() {}
 window.syncAllData = syncAllData;
 window.updateEquipmentDB = updateEquipmentDB;
 window.applyFilters = applyFilters;
