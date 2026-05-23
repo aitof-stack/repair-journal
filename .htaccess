@@ -1,8 +1,5 @@
 RewriteEngine On
 
-# API requests → PHP handler
-RewriteRule ^api/ php/index.php [L,QSA]
-
 # Static files exist? serve them directly
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule . - [L]
